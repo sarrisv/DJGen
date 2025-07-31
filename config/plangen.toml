@@ -1,0 +1,27 @@
+[project]
+name = "Test Config"
+output_dir = "output"
+
+[[iterations]]
+name = "plangen"
+
+[iterations.datagen]
+tables = [
+    { name = "rel0", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel1", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel2", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel3", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel4", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+]
+
+[iterations.plangen]
+num_plans = 2
+base_plans = [
+    { pattern = "star" },
+    { pattern = "linear" },
+    { pattern = "cyclic" },
+    { pattern = "random" },
+]
+
+[iterations.analysis]
+enabled = true

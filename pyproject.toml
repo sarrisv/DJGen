@@ -1,0 +1,18 @@
+[project]
+name = "djp-generator"
+version = "0.1.0"
+dependencies = [
+    "dask[complete]>=2025.7.0",
+    "pandas>=2.3.1",
+]
+requires-python = ">=3.11"
+authors = [
+    { name = "Vasilis Sarris", email = "v.sarris@pitt.edu" },
+]
+description = "Easily generate customizable data and join plans for fully conjunctive natural joins"
+readme = "README.md"
+license = "MIT"
+keywords = ["data-generation", "synthetic-data", "relational-joins"]
+
+[project.urls]
+Repository = "https://github.com/sarrisv/djp-generator.git"
