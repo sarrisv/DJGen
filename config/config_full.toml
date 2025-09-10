@@ -1,5 +1,5 @@
 [project]
-name = "Test Config"
+name = "Full Test Config"
 output_dir = "output"
 
 
@@ -8,31 +8,32 @@ name = "datagen"
 
 [iterations.datagen]
 tables = [
-  { name = "users", num_rows = 99999, columns = [ { name = "user_id", distribution = { type = "uniform" }, low = 0, high = 100000, null_ratio = 0.2, dtype = "int64" }, { name = "rating", distribution = { type = "gaussian", mean = 3.5, std = 1.2 }, dtype = "float64" }, ] },
-  { name = "products", num_rows = 499999, columns = [ { name = "product_id", distribution = { type = "uniform" }, low = 1, high = 5000, dtype = "int32" }, { name = "category_id", distribution = { type = "zipf", skew = 2.1 }, dtype = "int32" }, { name = "price", distribution = { type = "gaussian", mean = 99.99, std = 45.0 }, dtype = "float64"}, ] },
-  { name = "purchases", num_rows = 5000000, columns = [ { name = "purchase_id", distribution = { type = "uniform" }, low = 1, high = 500000, dtype = "int64" }, { name = "user_id", distribution = { type = "zipf", skew = 1.8 }, low = 1, high = 100000 , dtype = "int64" }, { name = "product_id", distribution = { type = "zipf", skew = 2.5 }, low = 1, high = 5000, dtype = "int32" }, ] },
+    { name = "users", num_rows = 999999, columns = [ { name = "user_id", distribution = { type = "uniform" }, low = 0, high = 100000, null_ratio = 0.2, dtype = "int64" }, { name = "rating", distribution = { type = "gaussian", mean = 3.5, std = 1.2 }, dtype = "float64" }, ] },
+    { name = "products", num_rows = 4999999, columns = [ { name = "product_id", distribution = { type = "uniform" }, low = 1, high = 5000, dtype = "int32" }, { name = "category_id", distribution = { type = "zipf", skew = 2.1 }, dtype = "int32" }, { name = "price", distribution = { type = "gaussian", mean = 99.99, std = 45.0 }, dtype = "float64"}, ] },
+    { name = "purchases", num_rows = 5000000, columns = [ { name = "purchase_id", distribution = { type = "uniform" }, low = 1, high = 500000, dtype = "int64" }, { name = "user_id", distribution = { type = "zipf", skew = 1.8 }, low = 1, high = 100000 , dtype = "int64" }, { name = "product_id", distribution = { type = "zipf", skew = 2.5 }, low = 1, high = 5000, dtype = "int32" }, ] },
 ]
 
 
 [[iterations]]
-name = "joingen"
+name = "plangen"
 
 [iterations.datagen]
 tables = [
-    { name = "rel0", num_rows = 100000, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel1", num_rows = 1000000, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel2", num_rows = 100000, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel3", num_rows = 10000, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel4", num_rows = 1000, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel0", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel1", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel2", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel3", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+    { name = "rel4", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
 ]
 
 [iterations.plangen]
-num_plans = 2
+visualize = true
+visualization_format = "png"
 base_plans = [
-    { pattern = "star" },
-    { pattern = "linear" },
-    { pattern = "cyclic" },
-    { pattern = "random" },
+  { pattern = "random" },
+  { pattern = "linear", num_plans = 1 },
+  { pattern = "cyclic", num_plans = 2 },
+  { pattern = "star", num_plans = 3 },
 ]
 
 [iterations.analysis]

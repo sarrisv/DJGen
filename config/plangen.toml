@@ -1,5 +1,5 @@
 [project]
-name = "Test Config"
+name = "Synthetic Plan Generator"
 output_dir = "output"
 
 [[iterations]]
@@ -15,12 +15,13 @@ tables = [
 ]
 
 [iterations.plangen]
-num_plans = 2
+visualize = true
+visualization_format = "png"
 base_plans = [
-    { pattern = "star" },
-    { pattern = "linear" },
-    { pattern = "cyclic" },
-    { pattern = "random" },
+  { pattern = "random" },
+  { pattern = "linear", num_plans = 1 },
+  { pattern = "cyclic", num_plans = 2 },
+  { pattern = "star", num_plans = 3 },
 ]
 
 [iterations.analysis]

@@ -1,10 +1,6 @@
 # Data & Join Plan Generator (djp-generator)
 
-[![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Dask](https://img.shields.io/badge/powered%20by-Dask-orange.svg)](https://dask.org/)
-
-A command-line tool for generating configurable synthetic datasets and configurable fully conjunctive natural join plans. 
+A command-line tool for generating configurable synthetic datasets and configurable fully conjunctive natural join plans.
 
 ## Core Features
 
@@ -18,10 +14,10 @@ A command-line tool for generating configurable synthetic datasets and configura
   - `star`: A central table joined with multiple satellite tables
   - `linear`: A linear chain of joins (A-B, B-C, C-D)
   - `cyclic`: A linear plan with an additional join between the first and last tables
-- **Join Execution & Analysis**: Using Dask, it performs the joins on the generated data to learn the exact cardinality of each join stage. 
+- **Join Execution & Analysis**: Using Dask, it performs the joins on the generated data to learn the exact cardinality of each join stage.
 - **Configuration-Driven**: Configured via a single TOML configuration file. This allows for repeatable and shareable experimental setups.
-- **Scalable**: Built on Dask and Parquet, it can handle datasets that are larger than memory, distributing the workload efficiently on a local machine. 
-    - Note: Since the analysis is exact, it will not be as scalable. **Disable the analysis if you are finding the execution to be slow.**
+- **Scalable**: Built on Dask and Parquet, it can handle datasets that are larger than memory, distributing the workload efficiently on a local machine.
+  - Note: Since the analysis is exact, it will not be as scalable. **Disable the analysis if you are finding the execution to be slow.**
 
 ## How It Works
 
@@ -33,21 +29,24 @@ The tool operates in three distinct, sequential phases for each "iteration" defi
 
 ## Installation
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
+
     ```bash
     git clone https://github.com/sarrisv/djp-generator.git
     cd djp-generator
     ```
 
-2.  **Create and activate a virtual environment (recommended):**
+2. **Create and activate a virtual environment (recommended):**
+
     ```bash
     python -m venv venv
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
-3.  **Install the package and its dependencies:**
+3. **Install the package and its dependencies:**
+
     ```bash
-    pip install requirements.txt 
+    pip install requirements.txt
     ```
 
 ## Usage
@@ -75,14 +74,31 @@ tables = [
 
 [iterations.plangen]
 enabled = true
+visualize = true
+visualization_format = "png"
 base_plans = [
-    { name = "star_join", pattern = "star" },
-    { name = "linear_join", pattern = "linear" }
+    { pattern = "star", num_plans = 1, permutations = false },
+    { pattern = "linear", num_plans = 1, permutations = true }
 ]
 
 [iterations.analysis]
 enabled = true
 ```
+
+#### Plan Generation Configuration
+
+The `plangen` section supports the following options:
+
+- `enabled`: Whether to generate join plans
+- `visualize`: Whether to generate visualizations of the join plans  
+- `visualization_format`: Format for visualizations (`png`, `svg`, etc.)
+- `base_plans`: Array of plan configurations, each containing:
+  - `pattern`: Type of join pattern (`star`, `linear`, `cyclic`, `random`)
+  - `num_plans`: Number of instances of this pattern to generate
+  - `permutations`: Controls permutation generation:
+    - `false`: No permutations (generate base plan only)
+    - `true`: Generate all possible permutations
+    - `N` (integer): Generate up to N permutations
 
 More examples can be found in the `config` directory.
 
@@ -108,18 +124,29 @@ The tool will create an output directory structure as specified in your configur
 output/
 └── example/
     ├── data/
-    │   ├── customers/ (Parquet files)
-    │   └── orders/    (Parquet files)
+    │   ├── table0/ (Parquet files)
+    │   └── table1/ (Parquet files)
     ├── plans/
-    │   ├── star_join0_binary.json
-    │   ├── star_join0_nary.json
-    │   ├── linear_join0_binary.json
-    │   └── linear_join0_nary.json
-    └── analysis/
-        ├── star_join0_binary_analysis.json
-        ├── star_join0_nary_analysis.json
-        ├── linear_join0_binary_analysis.json
-        └── linear_join0_nary_analysis.json
+    │   ├── star0_binary.json
+    │   ├── star0_nary.json
+    │   ├── linear0_p0_binary.json (permutation 0)
+    │   ├── linear0_p0_nary.json
+    │   ├── linear0_p1_binary.json (permutation 1)
+    │   └── linear0_p1_nary.json
+    ├── analysis/
+    │   ├── star0_binary_analysis.json
+    │   ├── star0_nary_analysis.json
+    │   ├── linear0_p0_binary_analysis.json
+    │   ├── linear0_p0_nary_analysis.json
+    │   ├── linear0_p1_binary_analysis.json
+    │   └── linear0_p1_nary_analysis.json
+    └── visualizations/ (if enabled)
+        ├── star0_binary.png
+        ├── star0_nary.png
+        ├── linear0_p0_binary.png
+        ├── linear0_p0_nary.png
+        ├── linear0_p1_binary.png
+        └── linear0_p1_nary.png
 ```
 
 The `*_analysis.json` files contain the results of the join execution, including the output size at each stage.
@@ -127,3 +154,4 @@ The `*_analysis.json` files contain the results of the join execution, including
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
+

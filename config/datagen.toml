@@ -1,5 +1,5 @@
 [project]
-name = "Test Datagen"
+name = "Synthetic Data Generation"
 output_dir = "output"
 
 [[iterations]]
@@ -7,7 +7,7 @@ name = "datagen"
 
 [iterations.datagen]
 tables = [
-    { name = "users", num_rows = 99999, columns = [ { name = "user_id", distribution = { type = "uniform" }, low = 0, high = 100000, null_ratio = 0.2, dtype = "int64" }, { name = "rating", distribution = { type = "gaussian", mean = 3.5, std = 1.2 }, dtype = "float64" }, ] },
-    { name = "products", num_rows = 499999, columns = [ { name = "product_id", distribution = { type = "uniform" }, low = 1, high = 5000, dtype = "int32" }, { name = "category_id", distribution = { type = "zipf", skew = 2.1 }, dtype = "int32" }, { name = "price", distribution = { type = "gaussian", mean = 99.99, std = 45.0 }, dtype = "float64"}, ] },
-    { name = "purchases", num_rows = 5000000, columns = [ { name = "purchase_id", distribution = { type = "uniform" }, low = 1, high = 500000, dtype = "int64" }, { name = "user_id", distribution = { type = "zipf", skew = 1.8 }, low = 1, high = 100000 , dtype = "int64" }, { name = "product_id", distribution = { type = "zipf", skew = 2.5 }, low = 1, high = 5000, dtype = "int32" }, ] },
+    { name = "users", num_rows = 99999999, columns = [ { name = "user_id", distribution = { type = "uniform" }, low = 0, high = 100000, null_ratio = 0.2, dtype = "int64" }, { name = "rating", distribution = { type = "gaussian", mean = 3.5, std = 1.2 }, dtype = "float64" }, ] },
+    { name = "products", num_rows = 499999999, columns = [ { name = "product_id", distribution = { type = "uniform" }, low = 1, high = 5000, dtype = "int32" }, { name = "category_id", distribution = { type = "zipf", skew = 2.1 }, dtype = "int32" }, { name = "price", distribution = { type = "gaussian", mean = 99.99, std = 45.0 }, dtype = "float64"}, ] },
+    { name = "purchases", num_rows = 500000000, columns = [ { name = "purchase_id", distribution = { type = "uniform" }, low = 1, high = 500000, dtype = "int64" }, { name = "user_id", distribution = { type = "zipf", skew = 1.8 }, low = 1, high = 100000 , dtype = "int64" }, { name = "product_id", distribution = { type = "zipf", skew = 2.5 }, low = 1, high = 5000, dtype = "int32" }, ] },
 ]

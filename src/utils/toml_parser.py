@@ -34,11 +34,13 @@ def _get_default_config() -> Dict[str, Any]:
                 },
                 "plangen": {
                     "enabled": False,
+                    "visualize": False,
+                    "visualization_format": "png",
                     "base_plans": [
                         {
-                            "name": "default_plan",
                             "pattern": "random",
-                            "num_joins": 1,
+                            "num_plans": 1,
+                            "permutations": False,
                         }
                     ],
                 },

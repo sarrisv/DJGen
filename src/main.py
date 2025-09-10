@@ -7,6 +7,7 @@ from src.utils import parse_config
 from src.datagen import generate_data_for_iteration
 from src.plangen import generate_join_plans_for_iteration
 from src.analysis import generate_analysis_for_iteration
+from src.visualization.generator import create_visualizations_for_analyses
 
 
 def run_iterations(config):
@@ -36,13 +37,25 @@ def run_iterations(config):
         else:
             print("\tPlangen not enabled for this iteration\n")
 
-        analysis = iter_config.get("analysis", {})
-        if analysis.get("enabled", False):
+        analysis_config = iter_config.get("analysis", {})
+        if analysis_config.get("enabled", False):
             print("\tStarting analysis...")
             generate_analysis_for_iteration(output_dir)
             print()
         else:
             print("\tAnalysis not enabled for this iteration\n")
+
+        if plangen_config.get("visualize", False):
+            print("\tStarting visualization...")
+            analysis_dir = os.path.join(output_dir, "analysis")
+            visualizations_dir = os.path.join(output_dir, "visualizations")
+            visualization_format = plangen_config.get("visualization_format", "png")
+            create_visualizations_for_analyses(
+                analysis_dir, visualizations_dir, visualization_format
+            )
+            print()
+        else:
+            print("\tVisualization not enabled for this iteration\n")
 
     print(64 * "=")
     print("COMPLETED ALL ITERATIONS")

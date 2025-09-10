@@ -1,0 +1,42 @@
+[project]
+name = "Permutations"
+output_dir = "output"
+
+[[iterations]]
+name = "permutation"
+
+[iterations.datagen]
+enabled = true
+tables = [
+  { name = "rel0", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel1", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel2", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel3", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+]
+
+[iterations.plangen]
+visualize = true
+base_plans = [
+  { pattern = "linear", num_plans = 1, permutations = true },
+  { pattern = "cyclic", num_plans = 1, permutations = 3 },
+  { pattern = "star", num_plans = 1, permutations = false },
+]
+
+[iterations.analysis]
+enabled = true
