@@ -64,7 +64,9 @@ def run_iterations(config):
 def main():
     """Parses command-line arguments and starts the data generation process"""
 
-    parser = argparse.ArgumentParser(description="Generate and analyze synthetic data")
+    parser = argparse.ArgumentParser(
+        prog="python -m src.main", description="Generate and analyze synthetic data"
+    )
     parser.add_argument(
         "mode",
         choices=["run", "debug"],

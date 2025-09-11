@@ -15,14 +15,21 @@ def _create_base_graph(plan_name: str, suffix: str) -> Digraph:
     graph = Digraph(
         f"{plan_name}_{suffix}", comment=f"{suffix.title()} Join Plan: {plan_name}"
     )
-    graph.attr(rankdir="LR", bgcolor=BACKGROUND_COLOR)
+    graph.attr(
+        rankdir="LR",
+        bgcolor=BACKGROUND_COLOR,
+        fontsize="24",
+        fontcolor=OUTLINE_COLOR,
+        fontname="Arial Bold",
+        labelloc="t"
+    )
     graph.attr("node", fontsize="12", fontname="Arial Bold")
     graph.attr("edge", fontsize="10", fontname="Arial Bold")
-    
+
     # Add plan name as graph title
-    graph.attr(label=f"{plan_name.replace('_', ' ').title()}", 
+    graph.attr(label=f"{plan_name.replace('_', ' ').title()}",
                fontsize="16", fontname="Arial Bold", labelloc="t")
-    
+
     return graph
 
 
@@ -50,12 +57,12 @@ def _add_arrow(graph: Digraph, source: str, target: str):
 
 
 def generate_binary_join_visualization(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables
+        stages: List[Dict[str, Any]], analysis_name: str, base_tables
 ) -> Digraph:
     graph = _create_base_graph(analysis_name, "binary")
     graph.attr(ranksep="2.0", nodesep="1.0")
 
-    for table_name, output_size in base_tables:
+    for table_name, output_size in base_tables.items():
         table_label = f"{table_name}\n({output_size} rows)"
         _add_node(graph, table_name, table_label)
 
@@ -66,9 +73,10 @@ def generate_binary_join_visualization(
         result_name = stage["name"]
         output_size = stage["output_size"]
         on_attributes = stage["on_attributes"]
+        selectivity = stage["selectivity"]
 
         join_attrs = ", ".join(on_attributes)
-        result_label = f"Result {i+1}\n({output_size} rows)\nJoined On: {join_attrs}"
+        result_label = f"Result {i + 1}\n({output_size} rows)\nJoined On: {join_attrs}\nSelectivity: {selectivity}"
         _add_node(graph, result_name, result_label)
 
         _add_arrow(graph, table0, result_name)
@@ -77,7 +85,7 @@ def generate_binary_join_visualization(
 
 
 def generate_nary_join_visualization(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables
+        stages: List[Dict[str, Any]], analysis_name: str, base_tables
 ) -> Digraph:
     graph = _create_base_graph(analysis_name, "nary")
     graph.attr(ranksep="2.0", nodesep="1.0", compound="true")
@@ -88,13 +96,14 @@ def generate_nary_join_visualization(
         tables = stage["contains"]
         on_attributes = stage["on_attributes"]
         output_size = stage["output_size"]
+        selectivity = stage["selectivity"]
 
         cluster_name = f"cluster_{i}"
         fake_node = f"fake_node_{i}"
-        
+
         # Use join attributes as cluster label
         join_attrs_str = ", ".join(on_attributes)
-        attribute_label = f"Stage {i + 1}\n({output_size} rows)\nJoined On: {join_attrs_str}"
+        attribute_label = f"Stage {i + 1}\n({output_size} rows)\nJoined On: {join_attrs_str}\nSelectivity: {selectivity}"
 
         with graph.subgraph(name=cluster_name) as cluster:
             cluster.attr(
@@ -139,7 +148,6 @@ def generate_nary_join_visualization(
     return graph
 
 
-
 def generate_graphviz_from_analysis(stages: List[Dict[str, Any]], analysis_name: str, base_tables) -> Digraph:
     """Generate a graph representation of the given join analysis"""
     if not stages:
@@ -161,7 +169,7 @@ def generate_graphviz_from_analysis(stages: List[Dict[str, Any]], analysis_name:
 
 
 def create_visualization(
-    analysis_file_path: str, output_dir: str, output_format: str = "png"
+        analysis_file_path: str, output_dir: str, output_format: str = "png"
 ) -> str:
     """Create a visual representation of given join analysis"""
     with open(analysis_file_path, "r") as f:
@@ -187,7 +195,7 @@ def create_visualization(
 
 
 def create_visualizations_for_analyses(
-    analysis_dir: str, visualizations_dir: str, output_format: str = "png"
+        analysis_dir: str, visualizations_dir: str, output_format: str = "png"
 ) -> None:
     if not os.path.exists(analysis_dir):
         print(f"\t\t\tAnalysis directory does not exist: {analysis_dir}")

@@ -1,9 +1,11 @@
 import os
 import json
+from math import prod
 from typing import Dict, Any, List, Set, Tuple
 from collections import defaultdict
 import dask.dataframe as dd
 from dask.dataframe import DataFrame
+
 
 def _create_binary_execution_plan(plan_stages):
     execution_stages: List[Dict[str, any]] = []
@@ -38,7 +40,10 @@ def _create_binary_execution_plan(plan_stages):
             join_stage = max(table0_stage, table1_stage)
             intermediate_name = execution_stages[join_stage]["name"]
 
-            if table0 in table_composition[intermediate_name] and table1 in table_composition[intermediate_name]:
+            if (
+                table0 in table_composition[intermediate_name]
+                and table1 in table_composition[intermediate_name]
+            ):
                 # Both tables already joined in same join plan branch -- no need for a new join stage
                 execution_stages[join_stage]["on_attributes"].add(attr)
                 continue
@@ -52,13 +57,15 @@ def _create_binary_execution_plan(plan_stages):
         table_composition[intermediate_name].update(table_composition[table0])
         table_composition[intermediate_name].update(table_composition[table1])
 
-        execution_stages.append({
-            "type": stage["type"],
-            "name": intermediate_name,
-            "tables": {table0, table1},
-            "on_attributes": {stage["on_attribute"]},
-            "contains": table_composition[intermediate_name],
-        })
+        execution_stages.append(
+            {
+                "type": stage["type"],
+                "name": intermediate_name,
+                "tables": {table0, table1},
+                "on_attributes": {stage["on_attribute"]},
+                "contains": table_composition[intermediate_name],
+            }
+        )
 
         join_branches.append(intermediate_name)
         if table0 in join_branches:
@@ -80,13 +87,15 @@ def _create_binary_execution_plan(plan_stages):
         table_composition[intermediate_name].update(table_composition[table0])
         table_composition[intermediate_name].update(table_composition[table1])
 
-        execution_stages.append({
-            "type": "binary",
-            "name": f"result_{stage_counter}",
-            "tables": {table0, table1},
-            "on_attributes": {},
-            "contains": table_composition[intermediate_name],
-        })
+        execution_stages.append(
+            {
+                "type": "binary",
+                "name": f"result_{stage_counter}",
+                "tables": {table0, table1},
+                "on_attributes": {},
+                "contains": table_composition[intermediate_name],
+            }
+        )
 
         join_branches.pop(0)
 
@@ -125,13 +134,15 @@ def _create_nary_execution_plan(plan_stages):
                 tables[i] = execution_stages[table_stages[table]]["name"]
             table_composition[intermediate_name].update(table_composition[tables[i]])
 
-        execution_stages.append({
-            "type": stage["type"],
-            "name": intermediate_name,
-            "tables": tables,
-            "on_attributes": {stage["on_attribute"]},
-            "contains": table_composition[intermediate_name],
-        })
+        execution_stages.append(
+            {
+                "type": stage["type"],
+                "name": intermediate_name,
+                "tables": tables,
+                "on_attributes": {stage["on_attribute"]},
+                "contains": table_composition[intermediate_name],
+            }
+        )
 
         join_branches.append(intermediate_name)
 
@@ -151,13 +162,15 @@ def _create_nary_execution_plan(plan_stages):
         for table in join_branches:
             table_composition[intermediate_name].update(table_composition[table])
 
-        execution_stages.append({
-            "type": "nary",
-            "name": f"result_{stage_counter}",
-            "tables": join_branches,
-            "on_attributes": {},
-            "contains": table_composition[intermediate_name],
-        })
+        execution_stages.append(
+            {
+                "type": "nary",
+                "name": f"result_{stage_counter}",
+                "tables": join_branches,
+                "on_attributes": {},
+                "contains": table_composition[intermediate_name],
+            }
+        )
 
     return execution_stages, join_attrs_per_table
 
@@ -168,16 +181,18 @@ def _load_datafiles(table_paths, join_attrs_per_table) -> Dict[str, dd.DataFrame
         df = dd.read_parquet(path)
 
         # drop unused columns from each table
-        drop_set = set(col for col in df.columns if col not in join_attrs_per_table[name])
+        drop_set = set(
+            col for col in df.columns if col not in join_attrs_per_table[name]
+        )
         dfs[name] = df.drop(columns=drop_set)
 
     return dfs
 
 
 def _perform_stage_join(
-        dfs: Dict[str, dd.DataFrame],
-        tables: List[str],
-        on_attributes: List[str],
+    dfs: Dict[str, dd.DataFrame],
+    tables: List[str],
+    on_attributes: List[str],
 ) -> dd.DataFrame:
     left_table = tables.pop(0)
     left_df = dfs[left_table]
@@ -187,20 +202,18 @@ def _perform_stage_join(
 
         if on_attributes:
             left_df = dd.merge(
-                left_df, right_df,
+                left_df,
+                right_df,
                 on=on_attributes,
                 how="inner",
-                suffixes=(None, "_right")
+                suffixes=(None, "_right"),
             )
         else:
             # Makeshift cartesian product since dask doesn't support it
             left_df["key"] = 1
             right_df["key"] = 1
             left_df = dd.merge(
-                left_df, right_df,
-                on="key",
-                how="inner",
-                suffixes=(None, "_right")
+                left_df, right_df, on="key", how="inner", suffixes=(None, "_right")
             )
             left_df = left_df.drop(columns=["key"])
 
@@ -218,15 +231,16 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
     analysis_results = {"stages": []}
 
     if plan_stages[0]["type"] == "binary":
-        execution_plan, join_attrs_per_table = _create_binary_execution_plan(plan_stages)
+        execution_plan, join_attrs_per_table = _create_binary_execution_plan(
+            plan_stages
+        )
     else:
         execution_plan, join_attrs_per_table = _create_nary_execution_plan(plan_stages)
 
     dfs = _load_datafiles(table_paths, join_attrs_per_table)
-    analysis_results["base_relations"] = [
-        (name, len(df)) for name, df in dfs.items()
-    ]
+    analysis_results["base_relations"] = {name: len(df) for name, df in dfs.items()}
 
+    total_intermediates = 0
     for i, stage in enumerate(execution_plan):
         stage_result = {"stage": i, "type": stage["type"]}
         try:
@@ -236,19 +250,24 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
             print(f"\t\t\t\tAnalyzing stage {i}: Joining {tables} on {on_attributes}")
 
             # Perform the actual join
-            result_df = _perform_stage_join(
-                dfs, list(tables), list(on_attributes)
-            )
+            result_df = _perform_stage_join(dfs, list(tables), list(on_attributes))
 
             dfs[stage["name"]] = result_df
+
+            total_intermediates += len(result_df)
+            selectivity = len(result_df) / prod((len(dfs[table]) for table in tables))
 
             stage_result["name"] = stage["name"]
             stage_result["output_size"] = len(result_df)
             stage_result["tables"] = list(tables)
             stage_result["on_attributes"] = list(on_attributes)
             stage_result["contains"] = list(stage["contains"])
+            stage_result["total_intermediates"] = total_intermediates
+            stage_result["selectivity"] = max(round(selectivity, 4), 0.0001)
 
-            print(f"\t\t\t\t\tStage {i} completed: {len(result_df)} rows, tables: {sorted(tables)}")
+            print(
+                f"\t\t\t\t\tStage {i} completed: {len(result_df)} rows, tables: {sorted(tables)}"
+            )
 
         except Exception as e:
             error_message = f"{type(e).__name__} - {e}"
@@ -272,8 +291,7 @@ def generate_analysis_for_iteration(output_dir: str) -> None:
         return
 
     table_paths = {
-        os.path.basename(p): os.path.join(data_dir, p)
-        for p in os.listdir(data_dir)
+        os.path.basename(p): os.path.join(data_dir, p) for p in os.listdir(data_dir)
     }
     if not table_paths:
         print("\t\tNo data found to analyze. Skipping.")
