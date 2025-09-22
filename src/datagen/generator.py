@@ -1,3 +1,4 @@
+import logging
 import os
 
 import numpy as np
@@ -6,13 +7,14 @@ import dask.dataframe as dd
 
 from src.datagen import distributions
 
+logger = logging.getLogger("djp")
+
 DISTRIBUTION_FUNCTIONS = {
     "sequential": distributions.generate_sequential_column,
     "uniform": distributions.generate_uniform_column,
     "gaussian": distributions.generate_gaussian_column,
     "zipf": distributions.generate_zipf_column,
 }
-
 
 def _calculate_rows_per_partition(
     num_rows: int, total_bytes_per_row: int, target_mb: int = 128
@@ -112,7 +114,7 @@ def generate_data_for_iteration(data_gen_config: dict, output_dir: str) -> dict:
 
     for table_config in data_gen_config.get("tables", []):
         table_name = table_config["name"]
-        print(f"\t\tGenerating table {table_name}...", end="")
+        logger.debug(f"\t\tGenerating {table_name}...")
 
         table_df = _generate_table(table_config)
 
@@ -120,6 +122,6 @@ def generate_data_for_iteration(data_gen_config: dict, output_dir: str) -> dict:
         table_df.to_parquet(output_path, overwrite=True)
 
         table_paths[table_name] = output_path
-        print(f"\t\twritten to {output_path}")
+        logger.debug(f"\t\t\t...written to {output_path}")
 
     return table_paths

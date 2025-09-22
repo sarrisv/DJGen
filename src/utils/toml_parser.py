@@ -1,7 +1,10 @@
+import logging
 import tomllib
 import collections.abc
 from typing import Any, Dict
 
+
+logger = logging.getLogger("djp")
 
 def _get_default_config() -> Dict[str, Any]:
     """Returns the default configuration dictionary for the project"""
@@ -88,7 +91,7 @@ def parse_config(config_path: str) -> Dict[str, Any]:
         with open(config_path, "rb") as f:
             user_config = tomllib.load(f)
     except FileNotFoundError:
-        print(f"Warning: Config file not found at '{config_path}'. Using defaults.")
+        logger.debug(f"Warning: Config file not found at '{config_path}'. Using defaults.")
         user_config = {}
     except tomllib.TOMLDecodeError as e:
         raise ValueError(f"Error decoding TOML file '{config_path}': {e}") from e
@@ -115,5 +118,5 @@ def parse_config(config_path: str) -> Dict[str, Any]:
                     "enabled", True
                 )
 
-    print("Configuration loaded and processed successfully.")
+    logger.info("Configuration loaded and processed successfully.")
     return merged_config

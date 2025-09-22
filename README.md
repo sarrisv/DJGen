@@ -147,6 +147,12 @@ python -m src.main run config/config_full.toml
 python -m src.main debug config/config_full.toml
 ```
 
+**GUI mode** (standard mode with visual interface)
+
+```bash
+python -m streamlit run src/ui.py
+```
+
 The tool will display a Dask dashboard URL in run mode for monitoring execution progress.
 
 ### 3. Inspect the Output

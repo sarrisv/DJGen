@@ -1,5 +1,7 @@
 import argparse
+import logging
 import os
+import sys
 
 from dask.distributed import Client, LocalCluster
 
@@ -7,7 +9,17 @@ from src.utils import parse_config
 from src.datagen import generate_data_for_iteration
 from src.plangen import generate_join_plans_for_iteration
 from src.analysis import generate_analysis_for_iteration
-from src.visualization.generator import create_visualizations_for_analyses
+from src.visualization import create_visualizations_for_analyses
+
+logger = logging.getLogger("djp")
+
+def setup_logging(verbose=False):
+    """Configure logging based on verbosity level"""
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logger.setLevel(log_level)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(log_level)
+    logger.addHandler(ch)
 
 
 def run_iterations(config):
@@ -15,50 +27,45 @@ def run_iterations(config):
 
     for iter_config in config["iterations"]:
         iter_name = iter_config["name"]
-        print(64 * "=")
-        print(f"ITERATION: {iter_name}")
+        logger.info(64 * "=")
+        logger.info(f"ITERATION: {iter_name}")
         output_dir = os.path.join(config["project"]["output_dir"], iter_name)
 
         datagen_config = iter_config.get("datagen", {})
         if datagen_config.get("enabled", False):
-            print("\tStarting data generation")
+            logger.info("\tGenerating data...")
             generate_data_for_iteration(datagen_config, output_dir)
-            print()
         else:
-            print("\tDatagen not enabled for this iteration\n")
+            logger.debug("\tDatagen not enabled for this iteration")
 
         plangen_config = iter_config.get("plangen", {})
         if plangen_config.get("enabled", False):
-            print("\tStarting join plan generation")
+            logger.info("\tGenerating join plans...")
             generate_join_plans_for_iteration(
                 plangen_config, datagen_config, output_dir
             )
-            print()
         else:
-            print("\tPlangen not enabled for this iteration\n")
+            logger.debug("\tPlangen not enabled for this iteration")
 
         analysis_config = iter_config.get("analysis", {})
         if analysis_config.get("enabled", False):
-            print("\tStarting analysis...")
+            logger.info("\tGenerating analysis...")
             generate_analysis_for_iteration(output_dir)
-            print()
         else:
-            print("\tAnalysis not enabled for this iteration\n")
+            logger.debug("\tAnalysis not enabled for this iteration")
 
         if plangen_config.get("visualize", False):
-            print("\tStarting visualization...")
+            logger.info("\tGenerating visualizations...")
             analysis_dir = os.path.join(output_dir, "analysis")
             visualizations_dir = os.path.join(output_dir, "visualizations")
-            visualization_format = plangen_config.get("visualization_format", "png")
             create_visualizations_for_analyses(
-                analysis_dir, visualizations_dir, visualization_format
+                analysis_dir, visualizations_dir, plangen_config["visualization_format"]
             )
-            print()
         else:
-            print("\tVisualization not enabled for this iteration\n")
+            logger.debug("\tVisualization not enabled for this iteration\n")
 
-    print(64 * "=")
-    print("COMPLETED ALL ITERATIONS")
+    logger.info(64 * "=")
+    logger.info("COMPLETED ALL ITERATIONS")
 
 
 def main():
@@ -68,6 +75,9 @@ def main():
         prog="python -m src.main", description="Generate and analyze synthetic data"
     )
     parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    parser.add_argument(
         "mode",
         choices=["run", "debug"],
         help="Execution mode. 'run' sets up a Dask cluster, 'debug' does not as it is known to interfere with the pydev debugger",
@@ -75,14 +85,16 @@ def main():
     parser.add_argument(
         "config_file", type=str, help="Path to the TOML configuration file."
     )
+
     args = parser.parse_args()
+    setup_logging(args.verbose)
     config = parse_config(args.config_file)
 
     if args.mode == "run":
         with LocalCluster() as cluster, Client(cluster) as client:
-            print(f"Dask client dashboard is available at: {client.dashboard_link}")
+            logger.debug(f"Dask dashboard: {client.dashboard_link}")
             run_iterations(config)
-    else:  # 'debug' mode
+    else:
         run_iterations(config)
 
 

@@ -1,7 +1,10 @@
+import logging
 import os
 import json
 from typing import List, Dict, Any
 from graphviz import Digraph
+
+logger = logging.getLogger("djp")
 
 # Color scheme constants
 FILL_COLOR = "#DBEEFF"
@@ -187,10 +190,10 @@ def create_visualization(
     try:
         graph.render(output_file_path, format=output_format, cleanup=True)
         final_path = f"{output_file_path}.{output_format}"
-        print(f"\t\t\tVisualization saved to {final_path}")
+        logger.debug(f"\t\t\tVisualization written to {final_path}")
         return final_path
     except Exception as e:
-        print(f"\t\t\tError generating visualization: {e}")
+        logger.debug(f"\t\t\tError generating visualization: {e}")
         return None
 
 
@@ -198,17 +201,17 @@ def create_visualizations_for_analyses(
         analysis_dir: str, visualizations_dir: str, output_format: str = "png"
 ) -> None:
     if not os.path.exists(analysis_dir):
-        print(f"\t\t\tAnalysis directory does not exist: {analysis_dir}")
+        logger.debug(f"\t\tAnalysis directory does not exist: {analysis_dir}")
         return
 
     os.makedirs(visualizations_dir, exist_ok=True)
     analysis_files = [f for f in os.listdir(analysis_dir) if f.endswith("_analysis.json")]
 
     if not analysis_files:
-        print(f"\t\t\tNo analysis files found in {analysis_dir}")
+        logger.debug(f"\t\tNo analysis files found in {analysis_dir}")
         return
 
-    print(f"\t\t\tCreating visualizations for {len(analysis_files)} analyses...")
+    logger.debug(f"\t\tCreating visualizations for {len(analysis_files)} analyses...")
     for analysis_file in sorted(analysis_files):
         create_visualization(
             os.path.join(analysis_dir, analysis_file), visualizations_dir, output_format

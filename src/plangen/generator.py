@@ -1,11 +1,14 @@
+import logging
 import os
 import json
-import random # Added for random.sample
+import random
 from typing import List, Dict, Any, Tuple
 from collections import defaultdict, OrderedDict
 from itertools import permutations
 
 from src.plangen import patterns
+
+logger = logging.getLogger("djp")
 
 PATTERN_FUNCTIONS = {
     "linear": patterns.create_linear_plan,
@@ -69,11 +72,9 @@ def _generate_plan_permutations(
     return [list(perm) for perm in all_perms]
 
 
-
 def generate_join_plans_for_iteration(
     plan_gen_config: Dict[str, Any], data_gen_config: Dict[str, Any], output_dir: str
 ) -> None:
-
     plans_output_path = os.path.join(output_dir, "plans")
     os.makedirs(plans_output_path, exist_ok=True)
 
@@ -84,7 +85,7 @@ def generate_join_plans_for_iteration(
         num_plans = plan_config.get("num_plans", 1)
         permutations = plan_config.get("permutations", False)
 
-        print(f"\t\tGenerating {num_plans} instances of pattern: {pattern}")
+        logger.debug(f"\t\tGenerating {num_plans} instances of pattern: {pattern}")
 
         pattern_func = PATTERN_FUNCTIONS[pattern]
 
@@ -97,19 +98,18 @@ def generate_join_plans_for_iteration(
             )
             with open(base_output_path, "w") as f:
                 json.dump(base_plan, f, indent=4)
-            print(f"\t\t\tBase plan written to {base_output_path}")
-
+            logger.debug(f"\t\t\tBase plan written to {base_output_path}")
 
             plans = [base_plan]
 
             # Generate permutations if applicable
             if permutations is not False:
                 max_permutations = None if permutations is True else permutations
-                print(f"\t\t\tGenerating {"all" if max_permutations is None else max_permutations} permutations")
-
-                plans = _generate_plan_permutations(
-                    base_plan, max_permutations
+                logger.debug(
+                    f"\t\t\tGenerating {'all' if max_permutations is None else max_permutations} permutations"
                 )
+
+                plans = _generate_plan_permutations(base_plan, max_permutations)
 
             for j, plan in enumerate(plans):
                 binary_plan = _generate_binary_plan_from_base(plan)
@@ -118,7 +118,7 @@ def generate_join_plans_for_iteration(
                 )
                 with open(binary_output_path, "w") as f:
                     json.dump(binary_plan, f, indent=4)
-                print(
+                logger.debug(
                     f"\t\t\t\tBinary permutation {j} written to {binary_output_path}"
                 )
 
@@ -128,6 +128,6 @@ def generate_join_plans_for_iteration(
                 )
                 with open(nary_output_path, "w") as f:
                     json.dump(nary_plan, f, indent=4)
-                print(
+                logger.debug(
                     f"\t\t\t\tN-ary permutation {j} written to {nary_output_path}"
                 )

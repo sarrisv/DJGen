@@ -1,11 +1,13 @@
 import os
 import json
+import logging
 from math import prod
 from typing import Dict, Any, List, Set, Tuple
 from collections import defaultdict
 import dask.dataframe as dd
 from dask.dataframe import DataFrame
 
+logger = logging.getLogger("djp")
 
 def _create_binary_execution_plan(plan_stages):
     execution_stages: List[Dict[str, any]] = []
@@ -138,7 +140,7 @@ def _create_nary_execution_plan(plan_stages):
             {
                 "type": stage["type"],
                 "name": intermediate_name,
-                "tables": tables,
+                "tables": list(set(tables)),
                 "on_attributes": {stage["on_attribute"]},
                 "contains": table_composition[intermediate_name],
             }
@@ -247,7 +249,7 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
             tables = stage["tables"]
             on_attributes = stage["on_attributes"]
 
-            print(f"\t\t\t\tAnalyzing stage {i}: Joining {tables} on {on_attributes}")
+            logger.debug(f"\t\t\t\tAnalyzing stage {i}: Joining {tables} on {on_attributes}")
 
             # Perform the actual join
             result_df = _perform_stage_join(dfs, list(tables), list(on_attributes))
@@ -265,13 +267,13 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
             stage_result["total_intermediates"] = total_intermediates
             stage_result["selectivity"] = max(round(selectivity, 4), 0.0001)
 
-            print(
+            logger.debug(
                 f"\t\t\t\t\tStage {i} completed: {len(result_df)} rows, tables: {sorted(tables)}"
             )
 
         except Exception as e:
             error_message = f"{type(e).__name__} - {e}"
-            print(f"\t\t\t\t\tERROR analyzing stage {i}: {error_message}")
+            logger.debug(f"\t\t\t\t\tERROR analyzing stage {i}: {error_message}")
             stage_result["error"] = error_message
 
         analysis_results["stages"].append(stage_result)
@@ -280,31 +282,31 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
 
 
 def generate_analysis_for_iteration(output_dir: str) -> None:
-    print(f"\t\tStarting analysis for {output_dir}...")
+    logger.debug(f"\t\tStarting analysis for {output_dir}...")
     data_dir = os.path.join(output_dir, "data")
     plans_dir = os.path.join(output_dir, "plans")
     analysis_dir = os.path.join(output_dir, "analysis")
     os.makedirs(analysis_dir, exist_ok=True)
 
     if not os.path.exists(data_dir) or not os.path.exists(plans_dir):
-        print("\t\tData or plans directory missing. Skipping analysis.")
+        logger.debug("\t\tData or plans directory missing. Skipping analysis.")
         return
 
     table_paths = {
         os.path.basename(p): os.path.join(data_dir, p) for p in os.listdir(data_dir)
     }
     if not table_paths:
-        print("\t\tNo data found to analyze. Skipping.")
+        logger.debug("\t\tNo data found to analyze. Skipping.")
         return
 
     for plan_file in os.listdir(plans_dir):
         if not plan_file.endswith(".json") or "base" in plan_file:
             continue
         plan_name = plan_file.replace(".json", "")
-        print(f"\t\t\tAnalyzing plan: {plan_name}")
+        logger.debug(f"\t\t\tAnalyzing plan: {plan_name}")
         plan_path = os.path.join(plans_dir, plan_file)
         plan_analysis = _analyze_plan(plan_path, table_paths)
         output_path = os.path.join(analysis_dir, f"{plan_name}_analysis.json")
         with open(output_path, "w") as f:
             json.dump(plan_analysis, f, indent=4)
-        print(f"\t\t\t...written to {output_path}")
+        logger.debug(f"\t\t\t\t...written to {output_path}")
