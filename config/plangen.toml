@@ -7,21 +7,56 @@ name = "plangen"
 
 [iterations.datagen]
 tables = [
-    { name = "rel0", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel1", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel2", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel3", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
-    { name = "rel4", num_rows = 100, columns = [ { name = "attr0" }, { name = "attr1" }, { name = "attr2" }, { name = "attr3" }, { name = "attr4" }, { name = "attr5" }, ]},
+  { name = "rel0", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+    { name = "attr3" },
+    { name = "attr4" },
+    { name = "attr5" },
+  ] },
+  { name = "rel1", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+    { name = "attr3" },
+    { name = "attr4" },
+    { name = "attr5" },
+  ] },
+  { name = "rel2", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+    { name = "attr3" },
+    { name = "attr4" },
+    { name = "attr5" },
+  ] },
+  { name = "rel3", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+    { name = "attr3" },
+    { name = "attr4" },
+    { name = "attr5" },
+  ] },
+  { name = "rel4", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+    { name = "attr3" },
+    { name = "attr4" },
+    { name = "attr5" },
+  ] },
 ]
 
 [iterations.plangen]
 visualize = true
 visualization_format = "png"
 base_plans = [
-  { pattern = "random" },
-  { pattern = "linear", num_plans = 1 },
-  { pattern = "cyclic", num_plans = 2 },
-  { pattern = "star", num_plans = 3 },
+  { pattern = "linear", num_plans = 1, permutations = true },
+  { pattern = "cyclic", num_plans = 1, permutations = true },
+  { pattern = "star", num_plans = 1, permutations = true },
+  { pattern = "random", num_plans = 1, permutations = true },
 ]
 
 [iterations.analysis]

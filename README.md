@@ -1,32 +1,41 @@
 # Data & Join Plan Generator (djp-generator)
 
 A command-line tool for generating configurable synthetic datasets and configurable fully conjunctive natural join plans.
+Data generation and join plan analysis are parallelized via Dask.
 
 ## Core Features
 
-- **Data Generation**: Generate synthetic tables with specified row counts and column configurations. Data for columns can be generated using various distributions:
+- **Data Generation**: Can generate synthetic tables with specified row counts and column configurations. Data for columns can be generated using various distributions:
   - `sequential`: For creating unique IDs
   - `uniform`: For evenly distributed data
   - `gaussian`: For normally distributed data
   - `zipf`: For skewed, real-world-like data distributions
-- **Join Plan Generation**: Generate different types of join query plans based on your generated table schemas. Supported patterns include:
+- **Join Plan Generation**: Can generate binary and n-ary join queries for your generated data set using various of join patterns. Supported patterns include:
   - `random`: A random, connected graph of joins
   - `star`: A central table joined with multiple satellite tables
   - `linear`: A linear chain of joins (A-B, B-C, C-D)
   - `cyclic`: A chain of joins with cyclic attribute data dependencies
-- **Join Plan Analysis**: Generate an analysis of the generated including details like exact cardinality. Cardinality is computed via the exact join using Dask for more parallel computation.
+- **Join Plan Analysis**: Can generate an analysis of the generated plans including details like exact cardinality.
 - **Join Plan Visualizations**: Generate visual representations of join plans and their execution graphs in multiple formats (PNG, SVG, etc.) using GraphViz.
 - **Configuration-Driven**: Configured via a single TOML configuration file. This allows for repeatable and shareable experimental setups.
 - **Scalable**: Built on Dask and Parquet, it can handle datasets that are larger than memory, distributing the workload efficiently on a local machine.
-  - Note: Since the analysis is exact, it will not be as scalable. **Disable the analysis if you are finding the execution to be slow.**
+  - Note: Since the analysis is exact, and thus requires computing the actual joins, it will not be as scalable.
 
 ## How It Works
 
 The tool operates in three distinct, sequential phases for each "iteration" defined in your configuration file:
 
-1. **Data Generation (Datagen)**: It reads the `datagen` section of your configuration and creates the specified tables. Each table is generated as a Dask DataFrame and saved as a Parquet file in the output directory. This phase handles creating columns with the requested data types and distributions.
-2. **Plan Generation (Plangen)**: Using the table schemas from the previous step, it generates join plans according to the patterns (`star`, `linear`, etc.) you've specified. For each pattern, it creates both a `binary` (table-at-a-time) and `n-ary` (attribute-at-a-time) join plan, saving them as `.json` files.
-3. **Analysis**: The tool reads the generated data (Parquet files) and a join plan (JSON file). It then uses Dask to execute the joins one stage at a time, calculating the number of rows in the resulting DataFrame after each merge. The results, including the output size of each stage, are saved to an analysis JSON file.
+1. **Data Generation (Datagen)**: Reads the `datagen` section of your configuration and creates synthetic tables with specified schemas and distributions. Each table is generated as a Dask DataFrame and saved as Parquet files in the output directory.
+
+2. **Plan Generation (Plangen)**: Using the table schemas from the previous step, generates join plans according to the specified patterns (`star`, `linear`, `cyclic`, `random`). For each pattern, it creates both execution strategies:
+   - **Binary plans**: Sequential table-at-a-time joins with compound constraints
+   - **N-ary plans**: Attribute-at-a-time processing that simulates worst-case optimal join execution
+
+3. **Analysis**: Executes both binary and n-ary join plans using Dask and compares their performance:
+   - **Binary execution**: Creates materialized intermediate results at each stage
+   - **N-ary execution**: Applies constraints incrementally, tracking viable partial solutions
+   - Records detailed statistics (output sizes, selectivity, total intermediates) for each stage
+   - Both approaches produce identical final results, enabling performance comparison
 
 ## Installation
 

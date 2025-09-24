@@ -24,14 +24,18 @@ def _create_base_graph(plan_name: str, suffix: str) -> Digraph:
         fontsize="24",
         fontcolor=OUTLINE_COLOR,
         fontname="Arial Bold",
-        labelloc="t"
+        labelloc="t",
     )
     graph.attr("node", fontsize="12", fontname="Arial Bold")
     graph.attr("edge", fontsize="10", fontname="Arial Bold")
 
     # Add plan name as graph title
-    graph.attr(label=f"{plan_name.replace('_', ' ').title()}",
-               fontsize="16", fontname="Arial Bold", labelloc="t")
+    graph.attr(
+        label=f"{plan_name.replace('_', ' ').title()}",
+        fontsize="16",
+        fontname="Arial Bold",
+        labelloc="t",
+    )
 
     return graph
 
@@ -59,8 +63,22 @@ def _add_arrow(graph: Digraph, source: str, target: str):
     graph.edge(source, target, color=ARROW_COLOR, penwidth="2", arrowhead="vee")
 
 
+def _extract_unique_attributes(on_attributes: List[List[str]]) -> List[str]:
+    unique_attrs = set()
+    # Iterate through each table's key list (e.g., ['rel0_attr1', 'rel0_attr2'])
+    for key_list in on_attributes:
+        # Iterate through each key in the list (e.g., 'rel0_attr1')
+        for key in key_list:
+            # Split the key by '_' and take the attribute part
+            parts = key.split("_")
+            if len(parts) > 1:
+                unique_attrs.add(parts[1])
+
+    return sorted(list(unique_attrs))
+
+
 def generate_binary_join_visualization(
-        stages: List[Dict[str, Any]], analysis_name: str, base_tables
+    stages: List[Dict[str, Any]], analysis_name: str, base_tables
 ) -> Digraph:
     graph = _create_base_graph(analysis_name, "binary")
     graph.attr(ranksep="2.0", nodesep="1.0")
@@ -75,8 +93,9 @@ def generate_binary_join_visualization(
 
         result_name = stage["name"]
         output_size = stage["output_size"]
-        on_attributes = stage["on_attributes"]
         selectivity = stage["selectivity"]
+
+        on_attributes = _extract_unique_attributes(stage["on_attributes"])
 
         join_attrs = ", ".join(on_attributes)
         result_label = f"Result {i + 1}\n({output_size} rows)\nJoined On: {join_attrs}\nSelectivity: {selectivity}"
@@ -88,7 +107,7 @@ def generate_binary_join_visualization(
 
 
 def generate_nary_join_visualization(
-        stages: List[Dict[str, Any]], analysis_name: str, base_tables
+    stages: List[Dict[str, Any]], analysis_name: str, base_tables
 ) -> Digraph:
     graph = _create_base_graph(analysis_name, "nary")
     graph.attr(ranksep="2.0", nodesep="1.0", compound="true")
@@ -97,9 +116,10 @@ def generate_nary_join_visualization(
 
     for i, stage in enumerate(stages):
         tables = stage["contains"]
-        on_attributes = stage["on_attributes"]
         output_size = stage["output_size"]
         selectivity = stage["selectivity"]
+
+        on_attributes = _extract_unique_attributes(stage["on_attributes"])
 
         cluster_name = f"cluster_{i}"
         fake_node = f"fake_node_{i}"
@@ -151,7 +171,9 @@ def generate_nary_join_visualization(
     return graph
 
 
-def generate_graphviz_from_analysis(stages: List[Dict[str, Any]], analysis_name: str, base_tables) -> Digraph:
+def generate_graphviz_from_analysis(
+    stages: List[Dict[str, Any]], analysis_name: str, base_tables
+) -> Digraph:
     """Generate a graph representation of the given join analysis"""
     if not stages:
         return Digraph(analysis_name, comment=f"Empty Join Analysis: {analysis_name}")
@@ -165,14 +187,16 @@ def generate_graphviz_from_analysis(stages: List[Dict[str, Any]], analysis_name:
     else:
         # Fallback for unknown types
         graph = _create_base_graph(analysis_name, "unknown")
-        tables = {table for stage in stages for table in stage.get("tables_captured", [])}
+        tables = {
+            table for stage in stages for table in stage.get("tables_captured", [])
+        }
         for table in sorted(tables):
             _add_node(graph, table)
         return graph
 
 
 def create_visualization(
-        analysis_file_path: str, output_dir: str, output_format: str = "png"
+    analysis_file_path: str, output_dir: str, output_format: str = "png"
 ) -> str:
     """Create a visual representation of given join analysis"""
     with open(analysis_file_path, "r") as f:
@@ -198,14 +222,16 @@ def create_visualization(
 
 
 def create_visualizations_for_analyses(
-        analysis_dir: str, visualizations_dir: str, output_format: str = "png"
+    analysis_dir: str, visualizations_dir: str, output_format: str = "png"
 ) -> None:
     if not os.path.exists(analysis_dir):
         logger.debug(f"\t\tAnalysis directory does not exist: {analysis_dir}")
         return
 
     os.makedirs(visualizations_dir, exist_ok=True)
-    analysis_files = [f for f in os.listdir(analysis_dir) if f.endswith("_analysis.json")]
+    analysis_files = [
+        f for f in os.listdir(analysis_dir) if f.endswith("_analysis.json")
+    ]
 
     if not analysis_files:
         logger.debug(f"\t\tNo analysis files found in {analysis_dir}")

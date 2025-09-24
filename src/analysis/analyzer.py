@@ -9,106 +9,138 @@ from dask.dataframe import DataFrame
 
 logger = logging.getLogger("djp")
 
+
 def _create_binary_execution_plan(plan_stages):
     execution_stages: List[Dict[str, any]] = []
+    earliest_stage: Dict[frozenset, int] = {}
     latest_stage: Dict[str, int] = {}
-    stage_counter = 0
     result_counter = 1
 
     # used for removing unused columns when loading data
     join_attrs_per_table: Dict[str, set] = defaultdict(set)
-
     # used to track which tables contain which tables
     table_composition: Dict[str, set] = defaultdict(set)
     for stage in plan_stages:
         for table in stage["tables"]:
             table_composition[table].add(table)
+            join_attrs_per_table[table].add(stage["on_attribute"])
 
     # used to track join branches so we can join them together at the end if needed
     join_branches = []
 
     for stage in plan_stages:
         attr = stage["on_attribute"]
-        table0 = stage["tables"][0]
-        table1 = stage["tables"][1]
+        base_table0 = stage["tables"][0]
+        base_table1 = stage["tables"][1]
 
-        join_attrs_per_table[table0].add(attr)
-        join_attrs_per_table[table1].add(attr)
+        table_pair = frozenset({base_table0, base_table1})
+        earliest_stage_idx = earliest_stage.get(table_pair, None)
 
-        table0_stage = latest_stage.get(table0, None)
-        table1_stage = latest_stage.get(table1, None)
+        # Case 1: this pair of tables have been joined before, add the attr to the earliest stage they both exist
+        if earliest_stage_idx is not None:
+            earliest_execution_stage = execution_stages[earliest_stage_idx]
 
-        if table0_stage is not None and table1_stage is not None:
-            join_stage = max(table0_stage, table1_stage)
-            intermediate_name = execution_stages[join_stage]["name"]
+            table0_key = f"{base_table0}_{attr}"
+            table1_key = f"{base_table1}_{attr}"
 
-            if (
-                table0 in table_composition[intermediate_name]
-                and table1 in table_composition[intermediate_name]
-            ):
-                # Both tables already joined in same join plan branch -- no need for a new join stage
-                execution_stages[join_stage]["on_attributes"].add(attr)
-                continue
+            # table0 is / is in tables[0] => table1 is / is in tables[1]
+            if base_table0 in table_composition[earliest_execution_stage["tables"][0]]:
+                earliest_execution_stage["on_attributes"][0].append(table0_key)
+                earliest_execution_stage["on_attributes"][1].append(table1_key)
 
-        if table0_stage is not None:
-            table0 = execution_stages[table0_stage]["name"]
-        if table1_stage is not None:
-            table1 = execution_stages[table1_stage]["name"]
+            # table1 is / is in tables[0] => table0 is / is in tables[1]
+            else:
+                earliest_execution_stage["on_attributes"][0].append(table1_key)
+                earliest_execution_stage["on_attributes"][1].append(table0_key)
 
-        intermediate_name = f"result_{result_counter}"
-        table_composition[intermediate_name].update(table_composition[table0])
-        table_composition[intermediate_name].update(table_composition[table1])
+            continue
 
+        # Case 2: this pair of tables has not been joined before, create a new execution stage
+        table0_stage = latest_stage.get(base_table0, None)
+        table1_stage = latest_stage.get(base_table1, None)
+
+        current_table0 = (
+            base_table0
+            if table0_stage is None
+            else execution_stages[table0_stage]["name"]
+        )
+        current_table1 = (
+            base_table1
+            if table1_stage is None
+            else execution_stages[table1_stage]["name"]
+        )
+
+        result_name = f"result_{result_counter}"
+
+        table0_contains = table_composition[current_table0]
+        table1_contains = table_composition[current_table1]
+        result_contains = table0_contains.union(table1_contains)
+        table_composition[result_name].update(result_contains)
+
+        stage_idx = len(execution_stages)
         execution_stages.append(
             {
                 "type": stage["type"],
-                "name": intermediate_name,
-                "tables": {table0, table1},
-                "on_attributes": {stage["on_attribute"]},
-                "contains": table_composition[intermediate_name],
+                "name": result_name,
+                "tables": [current_table0, current_table1],
+                "on_attributes": [
+                    [f"{base_table0}_{attr}"],
+                    [f"{base_table1}_{attr}"],
+                ],
+                "contains": table_composition[result_name],
             }
         )
-
-        join_branches.append(intermediate_name)
-        if table0 in join_branches:
-            join_branches.remove(table0)
-        if table1 in join_branches:
-            join_branches.remove(table1)
-
-        for table in table_composition[intermediate_name]:
-            latest_stage[table] = stage_counter
-
         result_counter += 1
-        stage_counter += 1
 
+        # Update latest stage for all the tables in the new result
+        for table in result_contains:
+            latest_stage[table] = stage_idx
+
+        # Create an earliest stage entry for all new pairs of tables
+        # set ensures order does not matter
+        for left_table in table0_contains:
+            for right_table in table1_contains:
+                new_pair = frozenset({left_table, right_table})
+                if new_pair not in earliest_stage:
+                    earliest_stage[new_pair] = stage_idx
+
+        # Clean up join branches
+        if current_table0 in join_branches:
+            join_branches.remove(current_table0)
+        if current_table1 in join_branches:
+            join_branches.remove(current_table1)
+        join_branches.append(result_name)
+
+    # If there are dangling join branches join them via a cartesian product so we end with a single final result
+    # Possible if analyzing a bushy join plan that produces disconnected results
+    # Example with two stage bushy join plan -- stage 1: rel0 join rel1 -> result_1, stage 2: rel2 join rel3 -> result_2, need a final cartesian product to produce final output result_3
     while len(join_branches) > 1:
-        table0 = join_branches[0]
-        table1 = join_branches[1]
+        table0 = join_branches.pop(0)
+        table1 = join_branches.pop(0)
 
-        intermediate_name = f"result_{result_counter}"
-        table_composition[intermediate_name].update(table_composition[table0])
-        table_composition[intermediate_name].update(table_composition[table1])
+        result_name = f"result_{result_counter}"
+        result_contains = table_composition[table0].union(table_composition[table1])
+        table_composition[result_name].update(result_contains)
 
         execution_stages.append(
             {
                 "type": "binary",
-                "name": f"result_{stage_counter}",
-                "tables": {table0, table1},
-                "on_attributes": {},
-                "contains": table_composition[intermediate_name],
+                "name": result_name,
+                "tables": [table0, table1],
+                "on_attributes": [],
+                "contains": table_composition[result_name],
             }
         )
+        result_counter += 1
 
-        join_branches.pop(0)
+        join_branches.append(result_name)
 
     return execution_stages, join_attrs_per_table
 
 
 def _create_nary_execution_plan(plan_stages):
     execution_stages: List[Dict[str, any]] = []
-    attr_stage: Dict[str, int] = {}
     latest_stage: Dict[str, int] = {}
-    stage_counter = 0
     result_counter = 1
 
     # used for removing unused columns when loading data
@@ -117,60 +149,64 @@ def _create_nary_execution_plan(plan_stages):
     # used to track which tables contain which tables
     table_composition: Dict[str, set] = defaultdict(set)
     for stage in plan_stages:
+        attr = stage["on_attribute"]
         for table in stage["tables"]:
             table_composition[table].add(table)
+            join_attrs_per_table[table].add(attr)
 
     # used to track join branches so we can join them together at the end if needed
     join_branches = []
 
     for stage in plan_stages:
         attr = stage["on_attribute"]
-        tables = stage["tables"]
+        base_tables = stage["tables"]
 
-        table_stages = {}
-        intermediate_name = f"result_{result_counter}"
-        for i, table in enumerate(tables):
-            join_attrs_per_table[table].add(attr)
-            table_stages[table] = latest_stage.get(table, None)
-            if table_stages[table] is not None:
-                tables[i] = execution_stages[table_stages[table]]["name"]
-            table_composition[intermediate_name].update(table_composition[tables[i]])
+        result_name = f"result_{result_counter}"
+        current_tables = []
+        for table in base_tables:
+            table = (
+                execution_stages[latest_stage[table]]["name"]
+                if table in latest_stage
+                else table
+            )
+            current_tables.append(table)
+            table_composition[result_name].update(table_composition[table])
+        on_attributes = [[f"{table}_{attr}"] for table in base_tables]
 
+        stage_idx = len(execution_stages)
         execution_stages.append(
             {
                 "type": stage["type"],
-                "name": intermediate_name,
-                "tables": list(set(tables)),
-                "on_attributes": {stage["on_attribute"]},
-                "contains": table_composition[intermediate_name],
+                "name": result_name,
+                "tables": current_tables,
+                "on_attributes": on_attributes,
+                "contains": table_composition[result_name],
             }
         )
 
-        join_branches.append(intermediate_name)
+        join_branches.append(result_name)
 
-        for table in tables:
+        for table in current_tables:
             if table in join_branches:
                 join_branches.remove(table)
 
-        attr_stage[attr] = stage_counter
-        for table in table_composition[intermediate_name]:
-            latest_stage[table] = stage_counter
+        for table in table_composition[result_name]:
+            latest_stage[table] = stage_idx
 
         result_counter += 1
-        stage_counter += 1
 
     if len(join_branches) > 1:
-        intermediate_name = f"result_{result_counter}"
+        result_name = f"result_{result_counter}"
         for table in join_branches:
-            table_composition[intermediate_name].update(table_composition[table])
+            table_composition[result_name].update(table_composition[table])
 
         execution_stages.append(
             {
-                "type": "nary",
-                "name": f"result_{stage_counter}",
+                "type": "n-ary",
+                "name": f"result_{result_counter}",
                 "tables": join_branches,
-                "on_attributes": {},
-                "contains": table_composition[intermediate_name],
+                "on_attributes": [],
+                "contains": table_composition[result_name],
             }
         )
 
@@ -182,55 +218,77 @@ def _load_datafiles(table_paths, join_attrs_per_table) -> Dict[str, dd.DataFrame
     for name, path in table_paths.items():
         df = dd.read_parquet(path)
 
-        # drop unused columns from each table
         drop_set = set(
             col for col in df.columns if col not in join_attrs_per_table[name]
         )
-        dfs[name] = df.drop(columns=drop_set)
+        df = df.drop(columns=drop_set)
+
+        rename_map = {attr: f"{name}_{attr}" for attr in df.columns}
+        dfs[name] = df.rename(columns=rename_map)
 
     return dfs
 
 
-def _perform_stage_join(
-    dfs: Dict[str, dd.DataFrame],
-    tables: List[str],
-    on_attributes: List[str],
-) -> dd.DataFrame:
-    left_table = tables.pop(0)
-    left_df = dfs[left_table]
+def _perform_binary_join_stage(dfs: Dict, stage: Dict) -> dd.DataFrame:
+    table0 = stage["tables"][0]
+    table1 = stage["tables"][1]
 
-    for right_table in tables:
-        right_df = dfs[right_table]
+    table0_df = dfs[table0]
+    table1_df = dfs[table1]
 
-        if on_attributes:
-            left_df = dd.merge(
-                left_df,
-                right_df,
-                on=on_attributes,
-                how="inner",
-                suffixes=(None, "_right"),
+    table0_keys = stage["on_attributes"][0]
+    table1_keys = stage["on_attributes"][1]
+
+    # cartesian product for join branch merging
+    if not table0_keys:
+        table0_df["key"] = 1
+        table1_df["key"] = 1
+        return dd.merge(table0_df, table1_df, on="key", how="inner").drop(
+            columns=["key"]
+        )
+
+    return dd.merge(
+        table0_df, table1_df, left_on=table0_keys, right_on=table1_keys, how="inner"
+    )
+
+
+def _perform_nary_join_stage(dfs: Dict, stage: Dict) -> dd.DataFrame:
+    tables = stage["tables"].copy()
+    join_keys = stage["on_attributes"].copy()
+
+    table0 = tables.pop(0)
+    table0_df = dfs[table0]
+    table0_keys = join_keys.pop(0)
+
+    for i, table1 in enumerate(tables):
+        table1_df = dfs[table1]
+        table1_keys = join_keys[i]
+
+        if not table0_keys:
+            table0_df["key"] = 1
+            table1_df["key"] = 1
+            table0_df = dd.merge(table0_df, table1_df, on="key", how="inner").drop(
+                columns=["key"]
             )
         else:
-            # Makeshift cartesian product since dask doesn't support it
-            left_df["key"] = 1
-            right_df["key"] = 1
-            left_df = dd.merge(
-                left_df, right_df, on="key", how="inner", suffixes=(None, "_right")
-            )
-            left_df = left_df.drop(columns=["key"])
+            if table0 == table1:
+                select_filter = table0_df[table0_keys[0]] == table1_df[table1_keys[0]]
+                table0_df = table0_df[select_filter]
+            else:
+                table0_df = dd.merge(
+                    table0_df,
+                    table1_df,
+                    left_on=table0_keys,
+                    right_on=table1_keys,
+                    how="inner",
+                )
 
-        duplicate_columns = [col for col in left_df.columns if "_right" in col]
-        if duplicate_columns:
-            left_df = left_df.drop(columns=duplicate_columns)
-
-    return left_df
+    return table0_df
 
 
 def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]:
     with open(plan_path) as f:
         plan_stages = json.load(f)
-
-    analysis_results = {"stages": []}
 
     if plan_stages[0]["type"] == "binary":
         execution_plan, join_attrs_per_table = _create_binary_execution_plan(
@@ -240,36 +298,45 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
         execution_plan, join_attrs_per_table = _create_nary_execution_plan(plan_stages)
 
     dfs = _load_datafiles(table_paths, join_attrs_per_table)
-    analysis_results["base_relations"] = {name: len(df) for name, df in dfs.items()}
+
+    analysis_results = {
+        "base_relations": {name: len(df) for name, df in dfs.items()},
+        "stages": [],
+    }
 
     total_intermediates = 0
     for i, stage in enumerate(execution_plan):
         stage_result = {"stage": i, "type": stage["type"]}
         try:
-            tables = stage["tables"]
-            on_attributes = stage["on_attributes"]
+            logger.debug(
+                f"\t\t\t\tAnalyzing stage {i}: Joining {stage['tables']} on {stage['on_attributes']}"
+            )
 
-            logger.debug(f"\t\t\t\tAnalyzing stage {i}: Joining {tables} on {on_attributes}")
-
-            # Perform the actual join
-            result_df = _perform_stage_join(dfs, list(tables), list(on_attributes))
+            if stage["type"] == "binary":
+                result_df = _perform_binary_join_stage(dfs, stage)
+            else:
+                result_df = _perform_nary_join_stage(dfs, stage)
 
             dfs[stage["name"]] = result_df
-
-            total_intermediates += len(result_df)
-            selectivity = len(result_df) / prod((len(dfs[table]) for table in tables))
-
-            stage_result["name"] = stage["name"]
-            stage_result["output_size"] = len(result_df)
-            stage_result["tables"] = list(tables)
-            stage_result["on_attributes"] = list(on_attributes)
-            stage_result["contains"] = list(stage["contains"])
-            stage_result["total_intermediates"] = total_intermediates
-            stage_result["selectivity"] = max(round(selectivity, 4), 0.0001)
-
-            logger.debug(
-                f"\t\t\t\t\tStage {i} completed: {len(result_df)} rows, tables: {sorted(tables)}"
+            output_size = len(result_df)
+            total_intermediates += output_size
+            selectivity = output_size / prod(
+                (len(dfs[table]) for table in stage["tables"])
             )
+
+            stage_result.update(
+                {
+                    "name": stage["name"],
+                    "tables": stage["tables"],
+                    "on_attributes": stage["on_attributes"],
+                    "contains": list(stage["contains"]),
+                    "output_size": output_size,
+                    "total_intermediates": total_intermediates,
+                    "selectivity": max(round(selectivity, 4), 0.0001),
+                }
+            )
+
+            logger.debug(f"\t\t\t\t\tStage {i} completed: {output_size} rows")
 
         except Exception as e:
             error_message = f"{type(e).__name__} - {e}"
@@ -288,24 +355,25 @@ def generate_analysis_for_iteration(output_dir: str) -> None:
     analysis_dir = os.path.join(output_dir, "analysis")
     os.makedirs(analysis_dir, exist_ok=True)
 
-    if not os.path.exists(data_dir) or not os.path.exists(plans_dir):
-        logger.debug("\t\tData or plans directory missing. Skipping analysis.")
-        return
-
     table_paths = {
-        os.path.basename(p): os.path.join(data_dir, p) for p in os.listdir(data_dir)
+        os.path.basename(p): os.path.join(data_dir, p)
+        for p in os.listdir(data_dir)
+        if os.path.isdir(os.path.join(data_dir, p))
     }
     if not table_paths:
-        logger.debug("\t\tNo data found to analyze. Skipping.")
+        logger.debug("\t\tSKIPPING, no data found to analyze")
         return
 
     for plan_file in os.listdir(plans_dir):
         if not plan_file.endswith(".json") or "base" in plan_file:
             continue
+
         plan_name = plan_file.replace(".json", "")
         logger.debug(f"\t\t\tAnalyzing plan: {plan_name}")
         plan_path = os.path.join(plans_dir, plan_file)
+
         plan_analysis = _analyze_plan(plan_path, table_paths)
+
         output_path = os.path.join(analysis_dir, f"{plan_name}_analysis.json")
         with open(output_path, "w") as f:
             json.dump(plan_analysis, f, indent=4)
