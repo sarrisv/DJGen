@@ -2,6 +2,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe import DataFrame
 from numpy import dtype
+from typing import Union
 
 
 def generate_sequential_column(
@@ -20,8 +21,8 @@ def generate_uniform_column(
     num_rows: int,
     chunk_size: int,
     dtype: dtype,
-    low: int,
-    high: int,
+    low: Union[int, float],
+    high: Union[int, float],
 ) -> DataFrame:
     """Generates a Dask DataFrame with a single column of uniformly distributed random integers"""
 
@@ -37,8 +38,8 @@ def generate_gaussian_column(
     dtype: dtype,
     mean: float,
     std: float,
-    low: int,
-    high: int,
+    low: Union[int, float],
+    high: Union[int, float],
 ) -> DataFrame:
     """Generates a Dask DataFrame with a single column of normally distributed random numbers"""
 
@@ -52,8 +53,8 @@ def generate_zipf_column(
     num_rows: int,
     chunk_size: int,
     dtype: dtype,
-    low: int,
-    high: int,
+    low: Union[int, float],
+    high: Union[int, float],
     skew: float,
 ) -> DataFrame:
     """Generates a Dask DataFrame with a single column of Zipf-distributed random numbers"""

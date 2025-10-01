@@ -1,0 +1,38 @@
+[project]
+name = "Quick Test Config"
+output_dir = "output"
+
+[[iterations]]
+name = "quick"
+
+[iterations.datagen]
+enabled = true
+tables = [
+  { name = "rel0", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel1", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel2", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel3", num_rows = 100, columns = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+]
+
+[iterations.plangen]
+visualize = true
+base_plans = [{ pattern = "random" }]
+
+[iterations.analysis]
+enabled = true

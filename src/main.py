@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+from typing import Dict, Any
 
 from dask.distributed import Client, LocalCluster
 
@@ -13,7 +14,7 @@ from src.visualization import create_visualizations_for_analyses
 
 logger = logging.getLogger("djp")
 
-def setup_logging(verbose=False):
+def setup_logging(verbose: bool = False) -> None:
     """Configure logging based on verbosity level"""
     log_level = logging.DEBUG if verbose else logging.INFO
     logger.setLevel(log_level)
@@ -22,7 +23,7 @@ def setup_logging(verbose=False):
     logger.addHandler(ch)
 
 
-def run_iterations(config):
+def run_iterations(config: Dict[str, Any]) -> None:
     """Runs the data generation, planning, and analysis for each iteration in the config"""
 
     for iter_config in config["iterations"]:
@@ -68,7 +69,7 @@ def run_iterations(config):
     logger.info("COMPLETED ALL ITERATIONS")
 
 
-def main():
+def main() -> None:
     """Parses command-line arguments and starts the data generation process"""
 
     parser = argparse.ArgumentParser(

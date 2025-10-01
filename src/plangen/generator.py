@@ -1,10 +1,10 @@
+import json
 import logging
 import os
-import json
 import random
-from typing import List, Dict, Any, Tuple
 from collections import defaultdict, OrderedDict
 from itertools import permutations
+from typing import List, Dict, Any, Tuple, Optional
 
 from src.plangen import patterns
 
@@ -62,7 +62,7 @@ def _generate_nary_plan_from_base(base_plan: BasePlan) -> List[Dict[str, Any]]:
 
 
 def _generate_plan_permutations(
-    base_plan: BasePlan, max_permutations: int = None
+    base_plan: BasePlan, max_permutations: Optional[int] = None
 ) -> List[BasePlan]:
     all_perms = list(permutations(base_plan))
 

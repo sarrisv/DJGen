@@ -1,6 +1,6 @@
+import collections.abc
 import logging
 import tomllib
-import collections.abc
 from typing import Any, Dict
 
 

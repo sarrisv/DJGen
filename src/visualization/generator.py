@@ -1,7 +1,8 @@
+import json
 import logging
 import os
-import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
 from graphviz import Digraph
 
 logger = logging.getLogger("djp")
@@ -78,7 +79,7 @@ def _extract_unique_attributes(on_attributes: List[List[str]]) -> List[str]:
 
 
 def generate_binary_join_visualization(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables
+    stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
 ) -> Digraph:
     graph = _create_base_graph(analysis_name, "binary")
     graph.attr(ranksep="2.0", nodesep="1.0")
@@ -107,7 +108,7 @@ def generate_binary_join_visualization(
 
 
 def generate_nary_join_visualization(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables
+    stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
 ) -> Digraph:
     graph = _create_base_graph(analysis_name, "nary")
     graph.attr(ranksep="2.0", nodesep="1.0", compound="true")
@@ -172,7 +173,7 @@ def generate_nary_join_visualization(
 
 
 def generate_graphviz_from_analysis(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables
+    stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
 ) -> Digraph:
     """Generate a graph representation of the given join analysis"""
     if not stages:
@@ -197,7 +198,7 @@ def generate_graphviz_from_analysis(
 
 def create_visualization(
     analysis_file_path: str, output_dir: str, output_format: str = "png"
-) -> str:
+) -> Optional[str]:
     """Create a visual representation of given join analysis"""
     with open(analysis_file_path, "r") as f:
         analysis_data = json.load(f)

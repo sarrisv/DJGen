@@ -1,9 +1,10 @@
 import logging
 import os
+from typing import Dict, Any
 
-import numpy as np
 import dask.array as da
 import dask.dataframe as dd
+import numpy as np
 
 from src.datagen import distributions
 
@@ -28,7 +29,7 @@ def _calculate_rows_per_partition(
     return max(1, min(rows_per_partition, num_rows))
 
 
-def _generate_column(column_config: dict, num_rows: int, chunk_size: int) -> dd.Series:
+def _generate_column(column_config: Dict[str, Any], num_rows: int, chunk_size: int) -> dd.Series:
     """Generates a single Dask DataFrame column based on the provided configuration"""
 
     dist_config = column_config.get("distribution", {})
@@ -72,7 +73,7 @@ def _generate_column(column_config: dict, num_rows: int, chunk_size: int) -> dd.
     return col_df
 
 
-def _generate_table(table_config: dict) -> dd.DataFrame:
+def _generate_table(table_config: Dict[str, Any]) -> dd.DataFrame:
     """Generates a Dask DataFrame for a table based on its configuration"""
 
     num_rows = table_config.get("num_rows", 1000)
@@ -105,7 +106,7 @@ def _generate_table(table_config: dict) -> dd.DataFrame:
     return table_df.set_index("uid")
 
 
-def generate_data_for_iteration(data_gen_config: dict, output_dir: str) -> dict:
+def generate_data_for_iteration(data_gen_config: Dict[str, Any], output_dir: str) -> Dict[str, str]:
     """Orchestrates the data generation for all tables within a single iteration"""
 
     table_paths = {}

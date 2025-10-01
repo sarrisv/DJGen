@@ -1,25 +1,26 @@
-import os
 import json
 import logging
+import os
+from collections import defaultdict
 from math import prod
 from typing import Dict, Any, List, Set, Tuple
-from collections import defaultdict
+
 import dask.dataframe as dd
 from dask.dataframe import DataFrame
 
 logger = logging.getLogger("djp")
 
 
-def _create_binary_execution_plan(plan_stages):
-    execution_stages: List[Dict[str, any]] = []
-    earliest_stage: Dict[frozenset, int] = {}
+def _create_binary_execution_plan(plan_stages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, Set[str]]]:
+    execution_stages: List[Dict[str, Any]] = []
+    earliest_stage: Dict[frozenset[str], int] = {}
     latest_stage: Dict[str, int] = {}
     result_counter = 1
 
     # used for removing unused columns when loading data
-    join_attrs_per_table: Dict[str, set] = defaultdict(set)
+    join_attrs_per_table: Dict[str, Set[str]] = defaultdict(set)
     # used to track which tables contain which tables
-    table_composition: Dict[str, set] = defaultdict(set)
+    table_composition: Dict[str, Set[str]] = defaultdict(set)
     for stage in plan_stages:
         for table in stage["tables"]:
             table_composition[table].add(table)
@@ -138,16 +139,16 @@ def _create_binary_execution_plan(plan_stages):
     return execution_stages, join_attrs_per_table
 
 
-def _create_nary_execution_plan(plan_stages):
-    execution_stages: List[Dict[str, any]] = []
+def _create_nary_execution_plan(plan_stages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, Set[str]]]:
+    execution_stages: List[Dict[str, Any]] = []
     latest_stage: Dict[str, int] = {}
     result_counter = 1
 
     # used for removing unused columns when loading data
-    join_attrs_per_table: Dict[str, set] = defaultdict(set)
+    join_attrs_per_table: Dict[str, Set[str]] = defaultdict(set)
 
     # used to track which tables contain which tables
-    table_composition: Dict[str, set] = defaultdict(set)
+    table_composition: Dict[str, Set[str]] = defaultdict(set)
     for stage in plan_stages:
         attr = stage["on_attribute"]
         for table in stage["tables"]:
@@ -213,7 +214,7 @@ def _create_nary_execution_plan(plan_stages):
     return execution_stages, join_attrs_per_table
 
 
-def _load_datafiles(table_paths, join_attrs_per_table) -> Dict[str, dd.DataFrame]:
+def _load_datafiles(table_paths: Dict[str, str], join_attrs_per_table: Dict[str, Set[str]]) -> Dict[str, dd.DataFrame]:
     dfs: Dict[str, dd.DataFrame] = {}
     for name, path in table_paths.items():
         df = dd.read_parquet(path)
@@ -229,7 +230,7 @@ def _load_datafiles(table_paths, join_attrs_per_table) -> Dict[str, dd.DataFrame
     return dfs
 
 
-def _perform_binary_join_stage(dfs: Dict, stage: Dict) -> dd.DataFrame:
+def _perform_binary_join_stage(dfs: Dict[str, dd.DataFrame], stage: Dict[str, Any]) -> dd.DataFrame:
     table0 = stage["tables"][0]
     table1 = stage["tables"][1]
 
@@ -252,7 +253,7 @@ def _perform_binary_join_stage(dfs: Dict, stage: Dict) -> dd.DataFrame:
     )
 
 
-def _perform_nary_join_stage(dfs: Dict, stage: Dict) -> dd.DataFrame:
+def _perform_nary_join_stage(dfs: Dict[str, dd.DataFrame], stage: Dict[str, Any]) -> dd.DataFrame:
     tables = stage["tables"].copy()
     join_keys = stage["on_attributes"].copy()
 
@@ -319,7 +320,10 @@ def _analyze_plan(plan_path: str, table_paths: Dict[str, str]) -> Dict[str, Any]
 
             dfs[stage["name"]] = result_df
             output_size = len(result_df)
-            total_intermediates += output_size
+            if stage["type"] == "binary":
+                total_intermediates += output_size
+            else:
+                total_intermediates = output_size
             selectivity = output_size / prod(
                 (len(dfs[table]) for table in stage["tables"])
             )
