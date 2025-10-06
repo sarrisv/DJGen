@@ -4,7 +4,7 @@ import os
 import re
 import tempfile
 import zipfile
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import streamlit as st
 
@@ -55,7 +55,7 @@ VALIDATION_RULES = {
 
 
 class PlanMetadata:
-    """Enhanced plan metadata with consistent metric calculation."""
+    """Enhanced plan metadata with consistent metric calculation"""
 
     def __init__(self, filename: str, analysis_data: dict):
         self.filename = filename
@@ -88,9 +88,11 @@ class PlanMetadata:
         )
 
     def _parse_filename(self, filename: str):
-        """Parse filename consistently."""
+        """Parse filename consistently"""
+        # Remove the analysis suffix to get the base name
         base = filename.replace("_analysis.json", "")
 
+        # Extract plan type from suffix
         if base.endswith("_binary"):
             plan_type = "binary"
             base = base.replace("_binary", "")
@@ -100,6 +102,7 @@ class PlanMetadata:
         else:
             plan_type = "unknown"
 
+        # Extract permutation number if present (e.g., "star1_p2" -> permutation=2)
         permutation = None
         if "_p" in base:
             parts = base.split("_p")
@@ -107,27 +110,30 @@ class PlanMetadata:
             try:
                 permutation = int(parts[1])
             except (ValueError, IndexError):
+                # Invalid permutation format, ignore
                 pass
 
+        # Extract pattern name and index (e.g., "star1" -> pattern="star", index=1)
         match = re.match(r"([a-zA-Z]+)(\d+)", base)
         if match:
             pattern = match.group(1)
             index = int(match.group(2))
         else:
+            # No numeric suffix found
             pattern = base
             index = 0
 
         return pattern, index, permutation, plan_type
 
     def get_display_name(self) -> str:
-        """Get consistent display name."""
+        """Get consistent display name"""
         name = f"{self.base_plan}_{self.type}"
         if self.permutation is not None:
             name = f"{self.base_plan}_p{self.permutation}_{self.type}"
         return name
 
     def get_sort_key(self, sort_by: str):
-        """Get sort key consistently."""
+        """Get sort key consistently"""
         if sort_by == "Total Intermediates ↓":
             return -self.total_intermediates
         elif sort_by == "Total Intermediates ↑":
@@ -141,7 +147,7 @@ class PlanMetadata:
 
 
 def init_session_state() -> None:
-    """Initialize all session state with comprehensive defaults."""
+    """Initialize all session state with comprehensive defaults"""
     defaults = {
         "analysis_results": None,
         "output_dir": None,
@@ -160,14 +166,14 @@ def init_session_state() -> None:
 
 def create_project_config(
     project_name: str,
-    tables: list,
-    patterns: list,
+    tables: List[Dict[str, Any]],
+    patterns: List[str],
     enable_analysis: bool,
     enable_visualization: bool,
     visualization_format: str,
-    pattern_settings: dict,
-) -> dict:
-    """Create project configuration with consistent structure."""
+    pattern_settings: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Create project configuration with consistent structure"""
     base_plans = []
     for pattern in patterns:
         base_plans.append(
@@ -198,8 +204,8 @@ def create_project_config(
     }
 
 
-def run_djp_generator(config_dict: dict) -> Optional[str]:
-    """Run DJP generator with consistent error handling."""
+def run_djp_generator(config_dict: Dict[str, Any]) -> Optional[str]:
+    """Run DJP generator with consistent error handling"""
     temp_dir = tempfile.mkdtemp(prefix=CONFIG["temp_prefix"])
     config_dict["project"]["output_dir"] = temp_dir
 
@@ -240,8 +246,10 @@ def run_djp_generator(config_dict: dict) -> Optional[str]:
         return None
 
 
-def get_best_plans_by_type(plans: List[PlanMetadata], sort_by: str) -> tuple:
-    """Find the best binary and n-ary plans based on current sorting."""
+def get_best_plans_by_type(
+    plans: List[PlanMetadata], sort_by: str
+) -> Tuple[Optional[PlanMetadata], Optional[PlanMetadata]]:
+    """Find the best binary and n-ary plans based on current sorting"""
     binary_plans = [p for p in plans if p.type == "binary"]
     nary_plans = [p for p in plans if p.type == "nary"]
 
@@ -257,7 +265,7 @@ def get_best_plans_by_type(plans: List[PlanMetadata], sort_by: str) -> tuple:
 
 
 def load_analysis_plans(analysis_dir: str) -> List[PlanMetadata]:
-    """Load analysis plans with consistent error handling."""
+    """Load analysis plans with consistent error handling"""
     if not os.path.exists(analysis_dir):
         return []
 
@@ -275,8 +283,8 @@ def load_analysis_plans(analysis_dir: str) -> List[PlanMetadata]:
     return plans
 
 
-def create_zip_archive(file_paths: List[tuple], archive_name: str) -> bytes:
-    """Create ZIP archive from file paths."""
+def create_zip_archive(file_paths: List[Tuple[str, str]], archive_name: str) -> bytes:
+    """Create ZIP archive from file paths"""
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for file_path, archive_path in file_paths:
@@ -285,8 +293,8 @@ def create_zip_archive(file_paths: List[tuple], archive_name: str) -> bytes:
     return zip_buffer.getvalue()
 
 
-def get_all_data_files(output_dir: str) -> List[tuple]:
-    """Get all data files from output directory."""
+def get_all_data_files(output_dir: str) -> List[Tuple[str, str]]:
+    """Get all data files from output directory"""
     files = []
     iteration_dir = os.path.join(output_dir, CONFIG["iteration_name"])
 
@@ -321,3 +329,4 @@ def get_all_data_files(output_dir: str) -> List[tuple]:
                 files.append((file_path, f"visualizations/{filename}"))
 
     return files
+

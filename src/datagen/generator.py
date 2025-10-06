@@ -20,17 +20,24 @@ DISTRIBUTION_FUNCTIONS = {
 def _calculate_rows_per_partition(
     num_rows: int, total_bytes_per_row: int, target_mb: int = 128
 ) -> int:
-    """Calculates the number of rows per Dask partition for a target memory size"""
+    """Calculate rows per partition for target memory size"""
 
+    # Avoid division by zero
     if total_bytes_per_row == 0:
         return num_rows
+    
+    # Convert target MB to bytes
     target_bytes = target_mb * 1024 * 1024
+    
+    # Calculate how many rows fit in target memory
     rows_per_partition = target_bytes // total_bytes_per_row
+    
+    # Ensure at least 1 row per partition, but not more than total rows
     return max(1, min(rows_per_partition, num_rows))
 
 
 def _generate_column(column_config: Dict[str, Any], num_rows: int, chunk_size: int) -> dd.Series:
-    """Generates a single Dask DataFrame column based on the provided configuration"""
+    """Generate single column from config"""
 
     dist_config = column_config.get("distribution", {})
     dist_type = dist_config.get("type", "uniform")
@@ -74,7 +81,7 @@ def _generate_column(column_config: Dict[str, Any], num_rows: int, chunk_size: i
 
 
 def _generate_table(table_config: Dict[str, Any]) -> dd.DataFrame:
-    """Generates a Dask DataFrame for a table based on its configuration"""
+    """Generate table from config"""
 
     num_rows = table_config.get("num_rows", 1000)
 
@@ -106,14 +113,14 @@ def _generate_table(table_config: Dict[str, Any]) -> dd.DataFrame:
     return table_df.set_index("uid")
 
 
-def generate_data_for_iteration(data_gen_config: Dict[str, Any], output_dir: str) -> Dict[str, str]:
-    """Orchestrates the data generation for all tables within a single iteration"""
+def generate_data_for_iteration(datagen_config: Dict[str, Any], output_dir: str) -> Dict[str, str]:
+    """Generate all tables for iteration"""
 
     table_paths = {}
     data_output_path = os.path.join(output_dir, "data")
     os.makedirs(data_output_path, exist_ok=True)
 
-    for table_config in data_gen_config.get("tables", []):
+    for table_config in datagen_config.get("tables", []):
         table_name = table_config["name"]
         logger.debug(f"\t\tGenerating {table_name}...")
 

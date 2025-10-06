@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 import pandas as pd
 import plotly.express as px
@@ -19,8 +19,8 @@ from .models import (
 )
 
 
-def __render_two_column_layout(left_component, right_component):
-    """Standard two-column layout for paired form elements."""
+def _render_two_column_layout(left_component, right_component):
+    """Standard two-column layout for paired form elements"""
     col1, col2 = st.columns(2)
     with col1:
         left_result = left_component()
@@ -29,10 +29,10 @@ def __render_two_column_layout(left_component, right_component):
     return left_result, right_result
 
 
-def __render_distribution_params(
-    dist_type: str, key_prefix: str, defaults: Dict = None
-) -> Dict:
-    """Standardized distribution parameter input with consistent validation."""
+def _render_distribution_params(
+    dist_type: str, key_prefix: str, defaults: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Standardized distribution parameter input with consistent validation"""
     defaults = defaults or {}
     rules = VALIDATION_RULES[dist_type]
 
@@ -117,14 +117,14 @@ def __render_distribution_params(
         return {"start": start}
 
 
-def __render_standard_button_pair(
+def _render_standard_button_pair(
     left_text: str,
     right_text: str,
     left_key: str,
     right_key: str,
     right_disabled: bool = False,
 ) -> Tuple[bool, bool]:
-    """Standard button pair layout with consistent styling."""
+    """Standard button pair layout with consistent styling"""
 
     def left():
         return st.button(left_text, use_container_width=True, key=left_key)
@@ -137,7 +137,7 @@ def __render_standard_button_pair(
     return _render_two_column_layout(left, right)
 
 
-def __render_standard_input_pair(left_component, right_component):
+def _render_standard_input_pair(left_component, right_component):
     """Standard input pair"""
 
     def left():
@@ -150,7 +150,7 @@ def __render_standard_input_pair(left_component, right_component):
 
 
 def _handle_analysis_execution(config: Dict[str, Any]) -> None:
-    """Handle analysis execution pipeline and state management."""
+    """Handle analysis execution pipeline and state management"""
     st.session_state.update({"running_analysis": True})
 
     try:
@@ -185,12 +185,12 @@ def _handle_analysis_execution(config: Dict[str, Any]) -> None:
 
 
 def _render_analysis_in_progress() -> None:
-    """Display analysis in progress indicator."""
+    """Display analysis in progress indicator"""
     st.info("Analysis in progress...")
 
 
 def _render_welcome_content() -> None:
-    """Render the welcome/landing page content."""
+    """Render the welcome/landing page content"""
     st.markdown("""
     # Data & Join Plan Generator
     
@@ -207,7 +207,7 @@ def _render_welcome_content() -> None:
 
 
 def _render_plan_filtering(plans: List[PlanMetadata]) -> Tuple[List[PlanMetadata], str]:
-    """Render plan filtering controls and return filtered plans with sort option."""
+    """Render plan filtering controls and return filtered plans with sort option"""
     unique_base_plans = sorted(set(p.base_plan for p in plans))
     unique_types = sorted(set(p.type for p in plans if p.type != "unknown"))
 
@@ -235,7 +235,7 @@ def _render_plan_filtering(plans: List[PlanMetadata]) -> Tuple[List[PlanMetadata
 def _render_plan_comparison_controls(
     filtered_plans: List[PlanMetadata], sort_by: str
 ) -> Tuple[PlanMetadata, PlanMetadata]:
-    """Render plan comparison controls and return selected plans."""
+    """Render plan comparison controls and return selected plans"""
     # Select best plans button
     best_binary, best_nary = get_best_plans_by_type(filtered_plans, sort_by)
     can_select_best = best_binary is not None and best_nary is not None
@@ -295,7 +295,7 @@ def _render_plan_comparison_controls(
 
 
 def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
-    """Create plotly charts for a plan with consistent styling."""
+    """Create plotly charts for a plan with consistent styling"""
     stages = plan.analysis_data.get("stages", [])
     if not stages:
         return None, None
@@ -343,7 +343,7 @@ def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
 
 
 def render_metrics_comparison(left_plan: PlanMetadata, right_plan: PlanMetadata):
-    """Render metrics with standardized 4-column layout."""
+    """Render metrics with standardized 4-column layout"""
     col1, col2 = st.columns(2)
 
     with col1:
@@ -393,7 +393,7 @@ def render_metrics_comparison(left_plan: PlanMetadata, right_plan: PlanMetadata)
 
 
 def render_charts_comparison(left_plan: PlanMetadata, right_plan: PlanMetadata):
-    """Render charts comparison with consistent layout."""
+    """Render charts comparison with consistent layout"""
     st.subheader("Performance Charts")
 
     # Generate charts for both plans
@@ -422,7 +422,7 @@ def render_charts_comparison(left_plan: PlanMetadata, right_plan: PlanMetadata):
 def render_visualizations(
     left_plan: PlanMetadata, right_plan: PlanMetadata, output_dir: str, viz_format: str
 ):
-    """Render join plan visualizations side by side."""
+    """Render join plan visualizations side by side"""
     viz_dir = os.path.join(output_dir, CONFIG["iteration_name"], "visualizations")
     if not os.path.exists(viz_dir):
         return
@@ -451,7 +451,7 @@ def render_visualizations(
 
 
 def render_downloads_section(output_dir: str):
-    """Render download section for all analysis results."""
+    """Render download section for all analysis results"""
     st.subheader("Downloads")
 
     all_files = get_all_data_files(output_dir)
@@ -481,7 +481,7 @@ def render_downloads_section(output_dir: str):
 def _render_comparison_dashboard(
     left_plan: PlanMetadata, right_plan: PlanMetadata
 ) -> None:
-    """Render the complete comparison dashboard with metrics, charts, and visualizations."""
+    """Render the complete comparison dashboard with metrics, charts, and visualizations"""
     st.divider()
     render_metrics_comparison(left_plan, right_plan)
 
@@ -499,7 +499,7 @@ def _render_comparison_dashboard(
 
 
 def _render_analysis_results() -> None:
-    """Render the complete analysis results interface."""
+    """Render the complete analysis results interface"""
     st.header("Analysis Results")
 
     analysis_dir = os.path.join(
@@ -522,13 +522,13 @@ def _render_analysis_results() -> None:
 
 
 def _render_project_settings() -> str:
-    """Render project name input and return the value."""
+    """Render project name input and return the value"""
     st.sidebar.subheader("Project")
     return st.sidebar.text_input("Project Name", value="Synthetic Data & Join Plans")
 
 
 def _render_mode_and_tables() -> Tuple[bool, list]:
-    """Render mode selection and table configuration, return mode and tables."""
+    """Render mode selection and table configuration, return mode and tables"""
     st.sidebar.subheader("Configuration Mode")
     advanced_mode = st.sidebar.toggle(
         "Advanced Mode", value=st.session_state.get("advanced_mode", False)
@@ -545,12 +545,12 @@ def _render_mode_and_tables() -> Tuple[bool, list]:
 
 
 def _render_patterns_and_analysis() -> Tuple[list, dict]:
-    """Render pattern configuration and return patterns with settings."""
+    """Render pattern configuration and return patterns with settings"""
     return render_pattern_configuration()
 
 
 def _render_sidebar_summary_and_run(patterns: list, tables: list) -> bool:
-    """Render sidebar summary validation and run button, return run state."""
+    """Render sidebar summary validation and run button, return run state"""
     # Configuration summary
     st.sidebar.divider()
     st.sidebar.subheader("Summary")
@@ -576,7 +576,7 @@ def _render_sidebar_summary_and_run(patterns: list, tables: list) -> bool:
 
 
 def render_simple_mode_config():
-    """Render simple mode configuration with consistent styling."""
+    """Render simple mode configuration with consistent styling"""
     st.sidebar.subheader("Simple Configuration")
 
     num_tables = st.sidebar.slider(
@@ -621,7 +621,7 @@ def render_simple_mode_config():
 
 
 def render_advanced_mode_config():
-    """Render advanced mode configuration with standardized components."""
+    """Render advanced mode configuration with standardized components"""
     st.sidebar.subheader("Advanced Configuration")
 
     if "advanced_tables" not in st.session_state:
@@ -671,7 +671,7 @@ def render_advanced_mode_config():
 
 
 def render_pattern_configuration():
-    """Render pattern configuration with consistent styling."""
+    """Render pattern configuration with consistent styling"""
     st.sidebar.subheader("Join Patterns")
 
     patterns = st.sidebar.multiselect(
@@ -706,7 +706,7 @@ def render_pattern_configuration():
 
 
 def render_analysis_options():
-    """Render analysis options with consistent styling."""
+    """Render analysis options with consistent styling"""
     st.sidebar.subheader("Analysis Options")
 
     enable_analysis = True  # Always enabled
@@ -719,8 +719,8 @@ def render_analysis_options():
     return enable_analysis, enable_visualization, viz_format
 
 
-def _render_table_basics(table_idx: int, table: Dict) -> None:
-    """Render table name and row count inputs."""
+def _render_table_basics(table_idx: int, table: Dict[str, Any]) -> None:
+    """Render table name and row count inputs"""
 
     def left():
         return st.text_input(
@@ -737,8 +737,8 @@ def _render_table_basics(table_idx: int, table: Dict) -> None:
     table.update({"name": name, "num_rows": rows})
 
 
-def _handle_column_management(table_idx: int, table: Dict) -> None:
-    """Handle add/remove column buttons and logic."""
+def _handle_column_management(table_idx: int, table: Dict[str, Any]) -> None:
+    """Handle add/remove column buttons and logic"""
     st.write("**Columns:**")
     add_clicked, remove_clicked = _render_standard_button_pair(
         "Add Column",
@@ -764,8 +764,8 @@ def _handle_column_management(table_idx: int, table: Dict) -> None:
         st.rerun()
 
 
-def render_table_configuration(table_idx: int, table: Dict) -> None:
-    """Orchestrate table configuration with focused helpers."""
+def render_table_configuration(table_idx: int, table: Dict[str, Any]) -> None:
+    """Orchestrate table configuration with focused helpers"""
     _render_table_basics(table_idx, table)
     _handle_column_management(table_idx, table)
 
@@ -775,8 +775,8 @@ def render_table_configuration(table_idx: int, table: Dict) -> None:
         render_column_configuration(table_idx, j, column)
 
 
-def render_column_configuration(table_idx: int, col_idx: int, column: Dict):
-    """Render individual column configuration with consistent components."""
+def render_column_configuration(table_idx: int, col_idx: int, column: Dict[str, Any]) -> None:
+    """Render individual column configuration with consistent components"""
 
     # Column basic settings
     def left():
@@ -820,7 +820,7 @@ def render_column_configuration(table_idx: int, col_idx: int, column: Dict):
 
 
 def render_sidebar() -> Dict[str, Any]:
-    """Main sidebar orchestrator with clean separation of concerns."""
+    """Main sidebar orchestrator with clean separation of concerns"""
     st.sidebar.title("DJP Generator Configuration")
 
     project_name = _render_project_settings()
@@ -843,7 +843,7 @@ def render_sidebar() -> Dict[str, Any]:
 
 
 def render_main_content(config: Dict[str, Any]) -> None:
-    """Render main content based on application state."""
+    """Render main content based on application state"""
     if config["run_clicked"]:
         _handle_analysis_execution(config)
     elif st.session_state.get("running_analysis"):

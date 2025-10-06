@@ -15,7 +15,7 @@ from src.visualization import create_visualizations_for_analyses
 logger = logging.getLogger("djp")
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure logging based on verbosity level"""
+    """Configure logging level"""
     log_level = logging.DEBUG if verbose else logging.INFO
     logger.setLevel(log_level)
     ch = logging.StreamHandler(sys.stdout)
@@ -24,7 +24,7 @@ def setup_logging(verbose: bool = False) -> None:
 
 
 def run_iterations(config: Dict[str, Any]) -> None:
-    """Runs the data generation, planning, and analysis for each iteration in the config"""
+    """Run data generation, planning, and analysis for each iteration"""
 
     for iter_config in config["iterations"]:
         iter_name = iter_config["name"]
@@ -70,7 +70,7 @@ def run_iterations(config: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    """Parses command-line arguments and starts the data generation process"""
+    """Parse command-line arguments and start data generation"""
 
     parser = argparse.ArgumentParser(
         prog="python -m src.main", description="Generate and analyze synthetic data"

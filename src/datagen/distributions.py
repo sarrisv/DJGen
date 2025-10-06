@@ -11,7 +11,7 @@ def generate_sequential_column(
     dtype: dtype,
     start: int,
 ) -> DataFrame:
-    """Generates a Dask DataFrame with a single column of sequential integers"""
+    """Generate sequential integers column"""
 
     dask_array = da.arange(start, start + num_rows, chunks=chunk_size, dtype=dtype)
     return dd.from_dask_array(dask_array)
@@ -24,7 +24,7 @@ def generate_uniform_column(
     low: Union[int, float],
     high: Union[int, float],
 ) -> DataFrame:
-    """Generates a Dask DataFrame with a single column of uniformly distributed random integers"""
+    """Generate uniform random integers column"""
 
     dask_array = da.random.randint(
         low, high, size=num_rows, chunks=chunk_size, dtype=dtype
@@ -41,7 +41,7 @@ def generate_gaussian_column(
     low: Union[int, float],
     high: Union[int, float],
 ) -> DataFrame:
-    """Generates a Dask DataFrame with a single column of normally distributed random numbers"""
+    """Generate gaussian random numbers column"""
 
     dask_array = da.random.normal(mean, std, size=num_rows, chunks=chunk_size).clip(
         low, high
@@ -57,7 +57,7 @@ def generate_zipf_column(
     high: Union[int, float],
     skew: float,
 ) -> DataFrame:
-    """Generates a Dask DataFrame with a single column of Zipf-distributed random numbers"""
+    """Generate zipf-distributed random numbers column"""
 
     dask_array = da.random.zipf(a=skew, size=num_rows, chunks=chunk_size).clip(
         low, high

@@ -64,23 +64,25 @@ def _generate_nary_plan_from_base(base_plan: BasePlan) -> List[Dict[str, Any]]:
 def _generate_plan_permutations(
     base_plan: BasePlan, max_permutations: Optional[int] = None
 ) -> List[BasePlan]:
+    # Generate all possible permutations of the join order
     all_perms = list(permutations(base_plan))
 
     if max_permutations is not None and len(all_perms) > max_permutations:
         all_perms = random.sample(all_perms, k=max_permutations)
 
+    # Convert tuples back to lists for JSON serialization
     return [list(perm) for perm in all_perms]
 
 
 def generate_join_plans_for_iteration(
-    plan_gen_config: Dict[str, Any], data_gen_config: Dict[str, Any], output_dir: str
+    plangen_config: Dict[str, Any], datagen_config: Dict[str, Any], output_dir: str
 ) -> None:
     plans_output_path = os.path.join(output_dir, "plans")
     os.makedirs(plans_output_path, exist_ok=True)
 
-    table_configs = data_gen_config.get("tables", [])
+    table_configs = datagen_config.get("tables", [])
 
-    for plan_config in plan_gen_config.get("base_plans", []):
+    for plan_config in plangen_config.get("base_plans", []):
         pattern = plan_config["pattern"]
         num_plans = plan_config.get("num_plans", 1)
         permutations = plan_config.get("permutations", False)

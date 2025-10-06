@@ -1,6 +1,6 @@
 # Data & Join Plan Generator (djp-generator)
 
-A command-line tool for generating configurable synthetic datasets and configurable fully conjunctive natural join plans.
+A command-line tool for generating configurable synthetic datasets and configurable fully conjunctive join plans.
 Data generation and join plan analysis are parallelized via Dask.
 
 ## Core Features
@@ -20,6 +20,7 @@ Data generation and join plan analysis are parallelized via Dask.
 - **Configuration-Driven**: Configured via a single TOML configuration file. This allows for repeatable and shareable experimental setups.
 - **Scalable**: Built on Dask and Parquet, it can handle datasets that are larger than memory, distributing the workload efficiently on a local machine.
   - Note: Since the analysis is exact, and thus requires computing the actual joins, it will not be as scalable.
+- **Web Interface**: Interactive Streamlit-based GUI for configuration and execution without command-line usage.
 
 ## How It Works
 
@@ -28,6 +29,7 @@ The tool operates in three distinct, sequential phases for each "iteration" defi
 1. **Data Generation (Datagen)**: Reads the `datagen` section of your configuration and creates synthetic tables with specified schemas and distributions. Each table is generated as a Dask DataFrame and saved as Parquet files in the output directory.
 
 2. **Plan Generation (Plangen)**: Using the table schemas from the previous step, generates join plans according to the specified patterns (`star`, `linear`, `cyclic`, `random`). For each pattern, it creates both execution strategies:
+
    - **Binary plans**: Sequential table-at-a-time joins with compound constraints
    - **N-ary plans**: Attribute-at-a-time processing that simulates worst-case optimal join execution
 
@@ -36,6 +38,16 @@ The tool operates in three distinct, sequential phases for each "iteration" defi
    - **N-ary execution**: Applies constraints incrementally, tracking viable partial solutions
    - Records detailed statistics (output sizes, selectivity, total intermediates) for each stage
    - Both approaches produce identical final results, enabling performance comparison
+
+## Prerequisites
+
+- Python 3.11 or higher
+- GraphViz (system dependency for visualizations)
+  - Linux:
+    - Arch: pacman -S graphviz
+    - Ubuntu/Debian: `sudo apt-get install graphviz`
+  - macOS: `brew install graphviz`
+  - Windows: Download from [https://graphviz.org/download/](https://graphviz.org/download/)
 
 ## Installation
 
@@ -48,17 +60,17 @@ The tool operates in three distinct, sequential phases for each "iteration" defi
 
 2. **Create virtual environment and install dependencies:**
 
-   Using uv (recommended):
+   Automatically install dependencies locally using uv (recommended):
 
    ```bash
    uv sync
    ```
 
-   Or using manually using venv and pip:
+   Or manually install dependencies locally using venv and pip:
 
    ```bash
     python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    source venv/bin/activate  # On Windows, use `venv\Scripts\Activate.ps1`
     pip install -r requirements.txt
    ```
 
@@ -68,7 +80,7 @@ The tool operates in three distinct, sequential phases for each "iteration" defi
 
 The behavior of the generator is controlled by a TOML file. You can define one or more "iterations," each with its own data, plans, and analysis steps.
 
-Here is an example `config.toml` that defines one iteration. This iteration generates two tables, `table0` and `table1`, and then creates, analyzes, and visualizes `star` and `linear` join plans for them.
+Here is an example `config.toml` that defines one iteration. This iteration generates two tables, `table0` and `table1`, and then creates, analyzes, and visualizes `star` and `linear` join plans for them. Each join plan produces both a binary (table-at-a-time) and n-ary (attribute-at-a-time) join plan.
 
 ```toml
 [project]
@@ -113,7 +125,7 @@ The `plangen` section supports the following options:
     - `true`: Generate all possible permutations
     - `N` (integer): Generate up to N permutations
 
-More examples can be found in the `config` directory.
+Complete configuration examples can be found in the `config/` directory, including `config_full.toml`, `quick.toml`, and specialized examples for different use cases.
 
 ## Project Structure
 
@@ -130,11 +142,17 @@ src/
 │   └── analyzer.py      # Dask-based join execution and cardinality analysis
 ├── visualization/       # Plan visualization
 │   └── generator.py     # Graph visualization using matplotlib/graphviz
+├── ui/                  # Web-based user interface
+│   ├── main.py          # Streamlit application entry point
+│   ├── components.py    # UI components and widgets
+│   └── models.py        # UI state management and data models
 └── utils/               # Shared utilities
     └── toml_parser.py   # Configuration file parsing
 ```
 
 ### 2. Run the Generator
+
+If using uv, add `uv run` before any command.
 
 View available options:
 
@@ -147,19 +165,19 @@ Execute the tool from your terminal, pointing it to your configuration file:
 **Standard mode** (recommended - uses Dask cluster for parallel execution):
 
 ```bash
-python -m src.main run config/config_full.toml
+python -m src.main run <config>
 ```
 
 **Debug mode** (sequential execution, better for development/debugging):
 
 ```bash
-python -m src.main debug config/config_full.toml
+python -m src.main debug <config>
 ```
 
 **GUI mode** (standard mode with visual interface)
 
 ```bash
-python -m streamlit run src/ui.py
+python -m streamlit run src/ui/main.py
 ```
 
 The tool will display a Dask dashboard URL in run mode for monitoring execution progress.

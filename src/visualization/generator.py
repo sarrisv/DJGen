@@ -15,12 +15,12 @@ BACKGROUND_COLOR = "#f8f9fa"
 
 
 def _create_base_graph(plan_name: str, suffix: str) -> Digraph:
-    """Create base graph with styling"""
+    """Create styled base graph"""
     graph = Digraph(
         f"{plan_name}_{suffix}", comment=f"{suffix.title()} Join Plan: {plan_name}"
     )
     graph.attr(
-        rankdir="LR",
+        rankdir="BT" if suffix == "binary" else "LR",
         bgcolor=BACKGROUND_COLOR,
         fontsize="24",
         fontcolor=OUTLINE_COLOR,
@@ -99,7 +99,7 @@ def generate_binary_join_visualization(
         on_attributes = _extract_unique_attributes(stage["on_attributes"])
 
         join_attrs = ", ".join(on_attributes)
-        result_label = f"Result {i + 1}\n({output_size} rows)\nJoined On: {join_attrs}\nSelectivity: {selectivity}"
+        result_label = f"Result {i + 1}\n({output_size} rows)\n\nJoined On: {join_attrs}\nSelectivity: {selectivity}"
         _add_node(graph, result_name, result_label)
 
         _add_arrow(graph, table0, result_name)
@@ -127,7 +127,7 @@ def generate_nary_join_visualization(
 
         # Use join attributes as cluster label
         join_attrs_str = ", ".join(on_attributes)
-        attribute_label = f"Stage {i + 1}\n({output_size} rows)\nJoined On: {join_attrs_str}\nSelectivity: {selectivity}"
+        attribute_label = f"Stage {i + 1}\n({output_size} rows)\n\nJoined On: {join_attrs_str}\nSelectivity: {selectivity}"
 
         with graph.subgraph(name=cluster_name) as cluster:
             cluster.attr(
@@ -175,7 +175,7 @@ def generate_nary_join_visualization(
 def generate_graphviz_from_analysis(
     stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
 ) -> Digraph:
-    """Generate a graph representation of the given join analysis"""
+    """Generate join analysis graph"""
     if not stages:
         return Digraph(analysis_name, comment=f"Empty Join Analysis: {analysis_name}")
 
@@ -199,7 +199,7 @@ def generate_graphviz_from_analysis(
 def create_visualization(
     analysis_file_path: str, output_dir: str, output_format: str = "png"
 ) -> Optional[str]:
-    """Create a visual representation of given join analysis"""
+    """Create join analysis visualization"""
     with open(analysis_file_path, "r") as f:
         analysis_data = json.load(f)
 
