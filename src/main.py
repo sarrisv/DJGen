@@ -10,9 +10,10 @@ from src.utils import parse_config
 from src.datagen import generate_data_for_iteration
 from src.plangen import generate_join_plans_for_iteration
 from src.analysis import generate_analysis_for_iteration
-from src.visualization import create_visualizations_for_analyses
+from src.visualization import create_visualizations_for_plans
 
 logger = logging.getLogger("djp")
+
 
 def setup_logging(verbose: bool = False) -> None:
     """Configure logging level"""
@@ -57,10 +58,10 @@ def run_iterations(config: Dict[str, Any]) -> None:
 
         if plangen_config.get("visualize", False):
             logger.info("\tGenerating visualizations...")
-            analysis_dir = os.path.join(output_dir, "analysis")
+            plans_dir = os.path.join(output_dir, "plans")
             visualizations_dir = os.path.join(output_dir, "visualizations")
-            create_visualizations_for_analyses(
-                analysis_dir, visualizations_dir, plangen_config["visualization_format"]
+            create_visualizations_for_plans(
+                plans_dir, visualizations_dir, plangen_config["visualization_format"]
             )
         else:
             logger.debug("\tVisualization not enabled for this iteration\n")

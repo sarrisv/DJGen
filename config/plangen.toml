@@ -6,8 +6,8 @@ output_dir = "output"
 name = "plangen"
 
 [iterations.datagen]
-tables = [
-  { name = "rel0", num_rows = 100, columns = [
+relations = [
+  { name = "rel0", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
@@ -15,7 +15,7 @@ tables = [
     { name = "attr4" },
     { name = "attr5" },
   ] },
-  { name = "rel1", num_rows = 100, columns = [
+  { name = "rel1", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
@@ -23,7 +23,7 @@ tables = [
     { name = "attr4" },
     { name = "attr5" },
   ] },
-  { name = "rel2", num_rows = 100, columns = [
+  { name = "rel2", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
@@ -31,7 +31,7 @@ tables = [
     { name = "attr4" },
     { name = "attr5" },
   ] },
-  { name = "rel3", num_rows = 100, columns = [
+  { name = "rel3", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
@@ -39,7 +39,7 @@ tables = [
     { name = "attr4" },
     { name = "attr5" },
   ] },
-  { name = "rel4", num_rows = 100, columns = [
+  { name = "rel4", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },

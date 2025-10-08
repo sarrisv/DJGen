@@ -13,7 +13,7 @@ from .models import (
     create_project_config,
     run_djp_generator,
     get_best_plans_by_type,
-    load_analysis_plans,
+    load_plans,
     create_zip_archive,
     get_all_data_files,
 )
@@ -156,7 +156,7 @@ def _handle_analysis_execution(config: Dict[str, Any]) -> None:
     try:
         config_dict = create_project_config(
             config["project_name"],
-            config["tables"],
+            config["relations"],
             config["patterns"],
             config["enable_analysis"],
             config["enable_visualization"],
@@ -296,7 +296,10 @@ def _render_plan_comparison_controls(
 
 def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
     """Create plotly charts for a plan with consistent styling"""
-    stages = plan.analysis_data.get("stages", [])
+    analysis_section = plan.plan_data.get("analysis", {})
+    stages = analysis_section.get("stages", [])
+    plan_type = plan.plan_data.get("execution_plan", {}).get("type")
+
     if not stages:
         return None, None
 
@@ -305,14 +308,13 @@ def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
     for stage in stages:
         stage_data.append(
             {
-                "Stage": stage["stage"],
+                "Stage": stage["stage_id"],
                 "Output Size": stage["output_size"],
                 "Selectivity": stage.get("selectivity", 0),
-                "Total Intermediates": stage.get("total_intermediates", 0),
-                "Materialized Intermediates": 0
-                if stage["type"] == "n-ary" and stage != stages[-1]
+                "Total Results": stage.get("total_intermediates", 0),
+                "Materialized Results": 0
+                if plan_type == "nary" and stage != stages[-1]
                 else stage.get("total_intermediates", 0),
-                "Tables": ", ".join(stage["tables"]),
             }
         )
 
@@ -322,9 +324,8 @@ def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
     fig1 = px.bar(
         df,
         x="Stage",
-        y="Materialized Intermediates",
-        hover_data=["Tables"],
-        title=f"{title_prefix} - Cumulative Materialized Intermediates",
+        y="Materialized Results",
+        title=f"{title_prefix} - Cumulative Materialized Results",
     )
     fig1.update_layout(height=300)
 
@@ -334,7 +335,6 @@ def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
         x="Stage",
         y="Selectivity",
         markers=True,
-        hover_data=["Tables"],
         title=f"{title_prefix} - Selectivity by Stage",
     )
     fig2.update_layout(height=300)
@@ -502,10 +502,10 @@ def _render_analysis_results() -> None:
     """Render the complete analysis results interface"""
     st.header("Analysis Results")
 
-    analysis_dir = os.path.join(
-        st.session_state.output_dir, CONFIG["iteration_name"], "analysis"
+    plans_dir = os.path.join(
+        st.session_state.output_dir, CONFIG["iteration_name"], "plans"
     )
-    plans = load_analysis_plans(analysis_dir)
+    plans = load_plans(plans_dir)
 
     if plans:
         filtered_plans, sort_by = _render_plan_filtering(plans)
@@ -527,21 +527,21 @@ def _render_project_settings() -> str:
     return st.sidebar.text_input("Project Name", value="Synthetic Data & Join Plans")
 
 
-def _render_mode_and_tables() -> Tuple[bool, list]:
-    """Render mode selection and table configuration, return mode and tables"""
+def _render_mode_and_relations() -> Tuple[bool, list]:
+    """Render mode selection and relation configuration, return mode and relations"""
     st.sidebar.subheader("Configuration Mode")
     advanced_mode = st.sidebar.toggle(
         "Advanced Mode", value=st.session_state.get("advanced_mode", False)
     )
     st.session_state.update({"advanced_mode": advanced_mode})
 
-    # Table configuration
+    # Relation configuration
     if advanced_mode:
-        tables = render_advanced_mode_config()
+        relations = render_advanced_mode_config()
     else:
-        tables = render_simple_mode_config()
+        relations = render_simple_mode_config()
 
-    return advanced_mode, tables
+    return advanced_mode, relations
 
 
 def _render_patterns_and_analysis() -> Tuple[list, dict]:
@@ -549,19 +549,19 @@ def _render_patterns_and_analysis() -> Tuple[list, dict]:
     return render_pattern_configuration()
 
 
-def _render_sidebar_summary_and_run(patterns: list, tables: list) -> bool:
+def _render_sidebar_summary_and_run(patterns: list, relations: list) -> bool:
     """Render sidebar summary validation and run button, return run state"""
     # Configuration summary
     st.sidebar.divider()
     st.sidebar.subheader("Summary")
-    if patterns and tables:
+    if patterns and relations:
         st.sidebar.success(f"{len(patterns)} pattern(s) selected")
-        st.sidebar.info(f"{len(tables)} table(s) configured")
+        st.sidebar.info(f"{len(relations)} relation(s) configured")
     else:
         if not patterns:
             st.sidebar.warning("Select join patterns")
-        if not tables:
-            st.sidebar.warning("Configure tables")
+        if not relations:
+            st.sidebar.warning("Configure relations")
 
     # Run button
     st.sidebar.divider()
@@ -569,7 +569,7 @@ def _render_sidebar_summary_and_run(patterns: list, tables: list) -> bool:
         "Run",
         type="primary",
         disabled=not patterns
-        or not tables
+        or not relations
         or st.session_state.get("running_analysis", False),
         use_container_width=True,
     )
@@ -579,20 +579,20 @@ def render_simple_mode_config():
     """Render simple mode configuration with consistent styling"""
     st.sidebar.subheader("Simple Configuration")
 
-    num_tables = st.sidebar.slider(
-        "Number of Tables",
-        CONFIG["table_limits"]["min"],
-        CONFIG["table_limits"]["max"],
-        CONFIG["table_limits"]["default"],
+    num_relations = st.sidebar.slider(
+        "Number of Relations",
+        CONFIG["rel_limits"]["min"],
+        CONFIG["rel_limits"]["max"],
+        CONFIG["rel_limits"]["default"],
     )
 
-    rows = st.sidebar.selectbox("Rows per Table", CONFIG["row_options"], index=2)
+    rows = st.sidebar.selectbox("Rows per Relation", CONFIG["row_options"], index=2)
 
-    columns = st.sidebar.slider(
-        "Columns per Table",
-        CONFIG["column_limits"]["min"],
-        CONFIG["column_limits"]["max"],
-        CONFIG["column_limits"]["default"],
+    attributes = st.sidebar.slider(
+        "Attributes per Relation",
+        CONFIG["attribute_limits"]["min"],
+        CONFIG["attribute_limits"]["max"],
+        CONFIG["attribute_limits"]["default"],
     )
 
     distribution = st.sidebar.selectbox(
@@ -603,50 +603,50 @@ def render_simple_mode_config():
     with st.sidebar:
         params = _render_distribution_params(distribution, "simple_config")
 
-    # Create tables with consistent structure
-    tables = []
-    for i in range(num_tables):
-        table_columns = []
-        for j in range(columns):
-            table_columns.append(
+    # Create relations with consistent structure
+    relations = []
+    for i in range(num_relations):
+        rel_attrs = []
+        for j in range(attributes):
+            rel_attrs.append(
                 {
                     "name": f"attr{j}",
                     "dtype": "int64",
                     "distribution": {"type": distribution, **params},
                 }
             )
-        tables.append({"name": f"rel{i}", "num_rows": rows, "columns": table_columns})
+        relations.append({"name": f"rel{i}", "num_rows": rows, "attributes": rel_attrs})
 
-    return tables
+    return relations
 
 
 def render_advanced_mode_config():
     """Render advanced mode configuration with standardized components"""
     st.sidebar.subheader("Advanced Configuration")
 
-    if "advanced_tables" not in st.session_state:
-        st.session_state.update({"advanced_tables": []})
+    if "advanced_relations" not in st.session_state:
+        st.session_state.update({"advanced_relations": []})
 
-    # Standardized table management buttons
+    # Standardized relation management buttons
     col1, col2 = st.sidebar.columns(2)
     with col1:
         add_clicked = st.button(
-            "Add Table", use_container_width=True, key="advanced_add_table"
+            "Add Relation", use_container_width=True, key="advanced_add_relation"
         )
     with col2:
         remove_clicked = st.button(
-            "Remove Table",
-            disabled=len(st.session_state["advanced_tables"]) == 0,
+            "Remove Relation",
+            disabled=len(st.session_state["advanced_relations"]) == 0,
             use_container_width=True,
-            key="advanced_remove_table",
+            key="advanced_remove_relation",
         )
 
     if add_clicked:
-        st.session_state["advanced_tables"].append(
+        st.session_state["advanced_relations"].append(
             {
-                "name": f"table_{len(st.session_state['advanced_tables'])}",
+                "name": f"rel{len(st.session_state['advanced_relations'])}",
                 "num_rows": 1000,
-                "columns": [
+                "attributes": [
                     {
                         "name": "id",
                         "dtype": "int64",
@@ -658,16 +658,16 @@ def render_advanced_mode_config():
         )
         st.rerun()
 
-    if remove_clicked and st.session_state["advanced_tables"]:
-        st.session_state["advanced_tables"].pop()
+    if remove_clicked and st.session_state["advanced_relations"]:
+        st.session_state["advanced_relations"].pop()
         st.rerun()
 
-    # Render each table with consistent styling
-    for i, table in enumerate(st.session_state["advanced_tables"]):
-        with st.sidebar.expander(f"Table: {table['name']}", expanded=False):
-            render_table_configuration(i, table)
+    # Render each relation with consistent styling
+    for i, rel in enumerate(st.session_state["advanced_relations"]):
+        with st.sidebar.expander(f"Relation: {rel['name']}", expanded=False):
+            render_relation_configuration(i, rel)
 
-    return st.session_state["advanced_tables"]
+    return st.session_state["advanced_relations"]
 
 
 def render_pattern_configuration():
@@ -719,39 +719,37 @@ def render_analysis_options():
     return enable_analysis, enable_visualization, viz_format
 
 
-def _render_table_basics(table_idx: int, table: Dict[str, Any]) -> None:
-    """Render table name and row count inputs"""
+def _render_relation_basics(rel_idx: int, rel: Dict[str, Any]) -> None:
+    """Render relation name and row count inputs"""
 
     def left():
-        return st.text_input(
-            "Name", value=table["name"], key=f"table_name_t{table_idx}"
-        )
+        return st.text_input("Name", value=rel["name"], key=f"rel_name_r{rel_idx}")
 
     def right():
         return st.selectbox(
-            "Rows", CONFIG["row_options"], index=2, key=f"table_rows_t{table_idx}"
+            "Rows", CONFIG["row_options"], index=2, key=f"rel_rows_r{rel_idx}"
         )
 
-    st.write("**Table:**")
+    st.write("**Relation:**")
     name, rows = _render_standard_input_pair(left, right)
-    table.update({"name": name, "num_rows": rows})
+    rel.update({"name": name, "num_rows": rows})
 
 
-def _handle_column_management(table_idx: int, table: Dict[str, Any]) -> None:
-    """Handle add/remove column buttons and logic"""
-    st.write("**Columns:**")
+def _handle_attribute_management(rel_idx: int, rel: Dict[str, Any]) -> None:
+    """Handle add/remove attribute buttons and logic"""
+    st.write("**Attributes:**")
     add_clicked, remove_clicked = _render_standard_button_pair(
-        "Add Column",
-        "Remove Column",
-        f"table_add_col_t{table_idx}",
-        f"table_remove_col_t{table_idx}",
-        right_disabled=len(table["columns"]) <= 1,
+        "Add Attribute",
+        "Remove Attribute",
+        f"rel_add_attr_t{rel_idx}",
+        f"rel_remove_attr_t{rel_idx}",
+        right_disabled=len(rel["attributes"]) <= 1,
     )
 
     if add_clicked:
-        table["columns"].append(
+        rel["attributes"].append(
             {
-                "name": f"col_{len(table['columns'])}",
+                "name": f"attr{len(rel['attributes'])}",
                 "dtype": "int64",
                 "distribution_type": "uniform",
                 "distribution_params": {},
@@ -759,37 +757,39 @@ def _handle_column_management(table_idx: int, table: Dict[str, Any]) -> None:
         )
         st.rerun()
 
-    if remove_clicked and len(table["columns"]) > 1:
-        table["columns"].pop()
+    if remove_clicked and len(rel["attributes"]) > 1:
+        rel["attributes"].pop()
         st.rerun()
 
 
-def render_table_configuration(table_idx: int, table: Dict[str, Any]) -> None:
-    """Orchestrate table configuration with focused helpers"""
-    _render_table_basics(table_idx, table)
-    _handle_column_management(table_idx, table)
+def render_relation_configuration(rel_idx: int, rel: Dict[str, Any]) -> None:
+    """Orchestrate relation configuration with focused helpers"""
+    _render_relation_basics(rel_idx, rel)
+    _handle_attribute_management(rel_idx, rel)
 
-    # Render each column
-    for j, column in enumerate(table["columns"]):
-        st.write(f"*Column {j + 1}:*")
-        render_column_configuration(table_idx, j, column)
+    # Render each attribute
+    for j, attr in enumerate(rel["attributes"]):
+        st.write(f"*Attribute {j + 1}:*")
+        render_attribute_configuration(rel_idx, j, attr)
 
 
-def render_column_configuration(table_idx: int, col_idx: int, column: Dict[str, Any]) -> None:
-    """Render individual column configuration with consistent components"""
+def render_attribute_configuration(
+    rel_idx: int, attr_idx: int, attr: Dict[str, Any]
+) -> None:
+    """Render individual attribute configuration with consistent components"""
 
-    # Column basic settings
+    # Attribute basic settings
     def left():
         return st.text_input(
-            "Name", value=column["name"], key=f"column_name_t{table_idx}_c{col_idx}"
+            "Name", value=attr["name"], key=f"attribute_name_r{rel_idx}_a{attr_idx}"
         )
 
     def right():
         return st.selectbox(
             "Data Type",
             CONFIG["data_types"],
-            index=CONFIG["data_types"].index(column.get("dtype", "int64")),
-            key=f"column_dtype_t{table_idx}_c{col_idx}",
+            index=CONFIG["data_types"].index(attr.get("dtype", "int64")),
+            key=f"attribute_dtype_r{rel_idx}_a{attr_idx}",
         )
 
     name, dtype = _render_standard_input_pair(left, right)
@@ -798,18 +798,18 @@ def render_column_configuration(table_idx: int, col_idx: int, column: Dict[str, 
         "Distribution",
         CONFIG["distribution_types"],
         index=CONFIG["distribution_types"].index(
-            column.get("distribution_type", "uniform")
+            attr.get("distribution_type", "uniform")
         ),
-        key=f"column_dist_t{table_idx}_c{col_idx}",
+        key=f"attribute_dist_r{rel_idx}_a{attr_idx}",
     )
 
     # Distribution parameters with consistent styling
-    key_prefix = f"advanced_column_t{table_idx}_c{col_idx}_{distribution_type}"
+    key_prefix = f"advanced_attribute_r{rel_idx}_a{attr_idx}_{distribution_type}"
     params = _render_distribution_params(
-        distribution_type, key_prefix, column.get("distribution_params", {})
+        distribution_type, key_prefix, attr.get("distribution_params", {})
     )
 
-    column.update(
+    attr.update(
         {
             "name": name,
             "dtype": dtype,
@@ -824,15 +824,15 @@ def render_sidebar() -> Dict[str, Any]:
     st.sidebar.title("DJP Generator Configuration")
 
     project_name = _render_project_settings()
-    advanced_mode, tables = _render_mode_and_tables()
+    advanced_mode, rels = _render_mode_and_relations()
     patterns, pattern_settings = _render_patterns_and_analysis()
     enable_analysis, enable_visualization, viz_format = render_analysis_options()
-    run_clicked = _render_sidebar_summary_and_run(patterns, tables)
+    run_clicked = _render_sidebar_summary_and_run(patterns, rels)
 
     return {
         "project_name": project_name,
         "advanced_mode": advanced_mode,
-        "tables": tables,
+        "relations": rels,
         "patterns": patterns,
         "pattern_settings": pattern_settings,
         "enable_analysis": enable_analysis,

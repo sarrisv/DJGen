@@ -11,25 +11,25 @@ import streamlit as st
 from src.analysis import generate_analysis_for_iteration
 from src.datagen import generate_data_for_iteration
 from src.plangen import generate_join_plans_for_iteration
-from src.visualization import create_visualizations_for_analyses
+from src.visualization import create_visualizations_for_plans
 
 CONFIG = {
     "temp_prefix": "djp_web_",
     "iteration_name": "web_generated",
     "patterns": ["star", "linear", "cyclic", "random"],
     "default_patterns": ["star", "linear"],
-    "table_limits": {"min": 3, "max": 7, "default": 5},
+    "rel_limits": {"min": 3, "max": 10, "default": 5},
     "row_options": [10, 100, 1000, 10000, 100000],
     "viz_formats": ["png", "svg"],
-    "column_limits": {"min": 3, "max": 10, "default": 5},
+    "attribute_limits": {"min": 3, "max": 10, "default": 5},
     "distribution_types": ["sequential", "uniform", "gaussian", "zipf"],
     "data_types": ["int32", "int64", "float32", "float64"],
 }
 
 SORT_OPTIONS = [
     "Name (alphabetical)",
-    "Total Intermediates ↓",
-    "Total Intermediates ↑",
+    "Total Results ↓",
+    "Total Results ↑",
     "Average Selectivity ↓",
     "Average Selectivity ↑",
 ]
@@ -57,16 +57,16 @@ VALIDATION_RULES = {
 class PlanMetadata:
     """Enhanced plan metadata with consistent metric calculation"""
 
-    def __init__(self, filename: str, analysis_data: dict):
+    def __init__(self, filename: str, plan: dict):
         self.filename = filename
-        self.analysis_data = analysis_data
+        self.plan_data = plan
         self.pattern, self.index, self.permutation, self.type = self._parse_filename(
             filename
         )
         self.base_plan = f"{self.pattern}{self.index}"
 
-        # Calculate metrics consistently
-        stages = analysis_data.get("stages", [])
+        analysis_section = plan.get("analysis", {})
+        stages = analysis_section.get("stages", [])
         self.total_intermediates = (
             stages[-1].get("total_intermediates", 0) if stages else 0
         )
@@ -90,7 +90,7 @@ class PlanMetadata:
     def _parse_filename(self, filename: str):
         """Parse filename consistently"""
         # Remove the analysis suffix to get the base name
-        base = filename.replace("_analysis.json", "")
+        base = filename.replace(".json", "")
 
         # Extract plan type from suffix
         if base.endswith("_binary"):
@@ -134,9 +134,9 @@ class PlanMetadata:
 
     def get_sort_key(self, sort_by: str):
         """Get sort key consistently"""
-        if sort_by == "Total Intermediates ↓":
+        if sort_by == "Total Results ↓":
             return -self.total_intermediates
-        elif sort_by == "Total Intermediates ↑":
+        elif sort_by == "Total Results ↑":
             return self.total_intermediates
         elif sort_by == "Average Selectivity ↓":
             return -self.avg_selectivity
@@ -155,7 +155,7 @@ def init_session_state() -> None:
         "selected_left_plan": None,
         "selected_right_plan": None,
         "advanced_mode": False,
-        "advanced_tables": [],
+        "advanced_relations": [],
         "visualization_format": "png",
     }
 
@@ -166,7 +166,7 @@ def init_session_state() -> None:
 
 def create_project_config(
     project_name: str,
-    tables: List[Dict[str, Any]],
+    relations: List[Dict[str, Any]],
     patterns: List[str],
     enable_analysis: bool,
     enable_visualization: bool,
@@ -191,7 +191,7 @@ def create_project_config(
         "iterations": [
             {
                 "name": CONFIG["iteration_name"],
-                "datagen": {"enabled": True, "tables": tables},
+                "datagen": {"enabled": True, "relations": relations},
                 "plangen": {
                     "enabled": True,
                     "visualize": enable_visualization,
@@ -205,7 +205,6 @@ def create_project_config(
 
 
 def run_djp_generator(config_dict: Dict[str, Any]) -> Optional[str]:
-    """Run DJP generator with consistent error handling"""
     temp_dir = tempfile.mkdtemp(prefix=CONFIG["temp_prefix"])
     config_dict["project"]["output_dir"] = temp_dir
 
@@ -233,12 +232,10 @@ def run_djp_generator(config_dict: Dict[str, Any]) -> Optional[str]:
 
             if plangen_config.get("visualize", False):
                 with st.spinner("Creating visualizations..."):
-                    analysis_dir = os.path.join(output_dir, "analysis")
+                    plans_dir = os.path.join(output_dir, "plans")
                     viz_dir = os.path.join(output_dir, "visualizations")
                     viz_format = plangen_config.get("visualization_format", "png")
-                    create_visualizations_for_analyses(
-                        analysis_dir, viz_dir, viz_format
-                    )
+                    create_visualizations_for_plans(plans_dir, viz_dir, viz_format)
 
         return temp_dir
     except Exception as e:
@@ -264,7 +261,7 @@ def get_best_plans_by_type(
     return best_binary, best_nary
 
 
-def load_analysis_plans(analysis_dir: str) -> List[PlanMetadata]:
+def load_plans(analysis_dir: str) -> List[PlanMetadata]:
     """Load analysis plans with consistent error handling"""
     if not os.path.exists(analysis_dir):
         return []
@@ -311,14 +308,13 @@ def get_all_data_files(output_dir: str) -> List[Tuple[str, str]]:
                     rel_path = os.path.relpath(file_path, iteration_dir)
                     files.append((file_path, rel_path))
 
-    # Add plan and analysis JSON files
-    for subdir in ["plans", "analysis"]:
-        target_dir = os.path.join(iteration_dir, subdir)
-        if os.path.exists(target_dir):
-            for filename in os.listdir(target_dir):
-                if filename.endswith(".json"):
-                    file_path = os.path.join(target_dir, filename)
-                    files.append((file_path, f"{subdir}/{filename}"))
+    # Add plan JSON files
+    plans_dir = os.path.join(iteration_dir, "plans")
+    if os.path.exists(plans_dir):
+        for filename in os.listdir(plans_dir):
+            if filename.endswith(".json"):
+                file_path = os.path.join(plans_dir, filename)
+                files.append((file_path, f"plans/{filename}"))
 
     # Add visualization files
     viz_dir = os.path.join(iteration_dir, "visualizations")
@@ -329,4 +325,3 @@ def get_all_data_files(output_dir: str) -> List[Tuple[str, str]]:
                 files.append((file_path, f"visualizations/{filename}"))
 
     return files
-

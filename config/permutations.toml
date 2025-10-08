@@ -7,23 +7,23 @@ name = "permutation"
 
 [iterations.datagen]
 enabled = true
-tables = [
-  { name = "rel0", num_rows = 100, columns = [
+relations = [
+  { name = "rel0", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
   ] },
-  { name = "rel1", num_rows = 100, columns = [
+  { name = "rel1", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
   ] },
-  { name = "rel2", num_rows = 100, columns = [
+  { name = "rel2", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },
   ] },
-  { name = "rel3", num_rows = 100, columns = [
+  { name = "rel3", num_rows = 100, attributes = [
     { name = "attr0" },
     { name = "attr1" },
     { name = "attr2" },

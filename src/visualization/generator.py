@@ -64,9 +64,9 @@ def _add_arrow(graph: Digraph, source: str, target: str):
     graph.edge(source, target, color=ARROW_COLOR, penwidth="2", arrowhead="vee")
 
 
-def _extract_unique_attributes(on_attributes: List[List[str]]) -> List[str]:
+def _extract_unique_attrs(on_attributes: List[List[str]]) -> List[str]:
     unique_attrs = set()
-    # Iterate through each table's key list (e.g., ['rel0_attr1', 'rel0_attr2'])
+    # Iterate through each relations's key list (e.g., ['rel0_attr1', 'rel0_attr2'])
     for key_list in on_attributes:
         # Iterate through each key in the list (e.g., 'rel0_attr1')
         for key in key_list:
@@ -79,55 +79,55 @@ def _extract_unique_attributes(on_attributes: List[List[str]]) -> List[str]:
 
 
 def generate_binary_join_visualization(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
+    stages: List[Dict[str, Any]], plan_name: str, base_relations: Dict[str, int]
 ) -> Digraph:
-    graph = _create_base_graph(analysis_name, "binary")
+    graph = _create_base_graph(plan_name, "binary")
     graph.attr(ranksep="2.0", nodesep="1.0")
 
-    for table_name, output_size in base_tables.items():
-        table_label = f"{table_name}\n({output_size} rows)"
-        _add_node(graph, table_name, table_label)
+    for rel_name, output_size in base_relations.items():
+        rel_label = f"{rel_name}\n({output_size} rows)"
+        _add_node(graph, rel_name, rel_label)
 
     for i, stage in enumerate(stages):
-        table0 = stage["tables"][0]
-        table1 = stage["tables"][1]
+        rel0 = stage["input_relations"][0]
+        rel1 = stage["input_relations"][1]
 
         result_name = stage["name"]
         output_size = stage["output_size"]
         selectivity = stage["selectivity"]
 
-        on_attributes = _extract_unique_attributes(stage["on_attributes"])
+        on_attributes = _extract_unique_attrs(stage["on_attributes"])
 
         join_attrs = ", ".join(on_attributes)
         result_label = f"Result {i + 1}\n({output_size} rows)\n\nJoined On: {join_attrs}\nSelectivity: {selectivity}"
         _add_node(graph, result_name, result_label)
 
-        _add_arrow(graph, table0, result_name)
-        _add_arrow(graph, table1, result_name)
+        _add_arrow(graph, rel0, result_name)
+        _add_arrow(graph, rel1, result_name)
     return graph
 
 
 def generate_nary_join_visualization(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
+    stages: List[Dict[str, Any]], plan_name: str, base_relations: Dict[str, int]
 ) -> Digraph:
-    graph = _create_base_graph(analysis_name, "nary")
+    graph = _create_base_graph(plan_name, "nary")
     graph.attr(ranksep="2.0", nodesep="1.0", compound="true")
 
     fake_nodes = []
 
     for i, stage in enumerate(stages):
-        tables = stage["contains"]
+        relations = stage["base_relations"]
         output_size = stage["output_size"]
         selectivity = stage["selectivity"]
 
-        on_attributes = _extract_unique_attributes(stage["on_attributes"])
+        on_attributes = _extract_unique_attrs(stage["on_attributes"])
 
         cluster_name = f"cluster_{i}"
         fake_node = f"fake_node_{i}"
 
         # Use join attributes as cluster label
         join_attrs_str = ", ".join(on_attributes)
-        attribute_label = f"Stage {i + 1}\n({output_size} rows)\n\nJoined On: {join_attrs_str}\nSelectivity: {selectivity}"
+        attribute_label = f"Stage {i + 1}\n({output_size} prefixes)\n\nJoined On: {join_attrs_str}\nSelectivity: {selectivity}"
 
         with graph.subgraph(name=cluster_name) as cluster:
             cluster.attr(
@@ -143,9 +143,9 @@ def generate_nary_join_visualization(
                 margin="25",
             )
 
-            for table in tables:
-                table_node = f"{table}_s{i}"
-                _add_node(cluster, table_node, table)
+            for rel in relations:
+                rel_node = f"{rel}_s{i}"
+                _add_node(cluster, rel_node, rel)
 
             # Add invisible connection node
             cluster.node(fake_node, style="invis", width="0", height="0")
@@ -172,49 +172,59 @@ def generate_nary_join_visualization(
     return graph
 
 
-def generate_graphviz_from_analysis(
-    stages: List[Dict[str, Any]], analysis_name: str, base_tables: Dict[str, int]
+def generate_graphviz_from_plan(
+    plan_type: str,
+    stages: List[Dict[str, Any]],
+    plan_name: str,
+    base_relations: Dict[str, int],
 ) -> Digraph:
-    """Generate join analysis graph"""
+    """Generate join plan graph"""
     if not stages:
-        return Digraph(analysis_name, comment=f"Empty Join Analysis: {analysis_name}")
+        return Digraph(plan_name, comment=f"Empty Join Plan: {plan_name}")
 
-    stage_type = stages[0].get("type", "")
-
-    if stage_type == "binary":
-        return generate_binary_join_visualization(stages, analysis_name, base_tables)
-    elif stage_type == "n-ary":
-        return generate_nary_join_visualization(stages, analysis_name, base_tables)
+    if plan_type == "binary":
+        return generate_binary_join_visualization(stages, plan_name, base_relations)
     else:
-        # Fallback for unknown types
-        graph = _create_base_graph(analysis_name, "unknown")
-        tables = {
-            table for stage in stages for table in stage.get("tables_captured", [])
-        }
-        for table in sorted(tables):
-            _add_node(graph, table)
-        return graph
+        return generate_nary_join_visualization(stages, plan_name, base_relations)
 
 
 def create_visualization(
-    analysis_file_path: str, output_dir: str, output_format: str = "png"
+    plan_path: str, output_dir: str, output_format: str = "png"
 ) -> Optional[str]:
     """Create join analysis visualization"""
-    with open(analysis_file_path, "r") as f:
-        analysis_data = json.load(f)
+    with open(plan_path, "r") as f:
+        plan = json.load(f)
 
-    analysis_name = os.path.splitext(os.path.basename(analysis_file_path))[0]
-    # Extract stages from analysis data
-    stages = analysis_data["stages"]
-    base_tables = analysis_data["base_relations"]
-    graph = generate_graphviz_from_analysis(stages, analysis_name, base_tables)
+    if "analysis" not in plan:
+        logger.debug(
+            f"\t\t\tSkipping visualization for {os.path.basename(plan_path)}: no analysis section found."
+        )
+        return None
+
+    plan_name = plan["query_id"]
+    execution_plan = plan["execution_plan"]
+    analysis = plan["analysis"]
+    base_relations = {
+        name: details["statistics"]["cardinality"]
+        for name, details in plan["catalog"].items()
+    }
+
+    merged_stages = []
+    for i, exec_stage in enumerate(execution_plan["stages"]):
+        analysis_stage = analysis["stages"][i]
+        merged_stage = {**exec_stage, **analysis_stage}
+        merged_stages.append(merged_stage)
+
+    graph = generate_graphviz_from_plan(
+        execution_plan["type"], merged_stages, plan_name, base_relations
+    )
 
     os.makedirs(output_dir, exist_ok=True)
-    output_file_path = os.path.join(output_dir, analysis_name)
+    output_path = os.path.join(output_dir, plan_name)
 
     try:
-        graph.render(output_file_path, format=output_format, cleanup=True)
-        final_path = f"{output_file_path}.{output_format}"
+        graph.render(output_path, format=output_format, cleanup=True)
+        final_path = f"{output_path}.{output_format}"
         logger.debug(f"\t\t\tVisualization written to {final_path}")
         return final_path
     except Exception as e:
@@ -222,24 +232,22 @@ def create_visualization(
         return None
 
 
-def create_visualizations_for_analyses(
-    analysis_dir: str, visualizations_dir: str, output_format: str = "png"
+def create_visualizations_for_plans(
+    plans_dir: str, visualizations_dir: str, output_format: str = "png"
 ) -> None:
-    if not os.path.exists(analysis_dir):
-        logger.debug(f"\t\tAnalysis directory does not exist: {analysis_dir}")
+    if not os.path.exists(plans_dir):
+        logger.debug(f"\t\tPlans directory does not exist: {plans_dir}")
         return
 
     os.makedirs(visualizations_dir, exist_ok=True)
-    analysis_files = [
-        f for f in os.listdir(analysis_dir) if f.endswith("_analysis.json")
-    ]
+    plan_files = [f for f in os.listdir(plans_dir) if f.endswith(".json")]
 
-    if not analysis_files:
-        logger.debug(f"\t\tNo analysis files found in {analysis_dir}")
+    if not plan_files:
+        logger.debug(f"\t\tNo plan files found in {plans_dir}")
         return
 
-    logger.debug(f"\t\tCreating visualizations for {len(analysis_files)} analyses...")
-    for analysis_file in sorted(analysis_files):
+    logger.debug(f"\t\tCreating visualizations for {len(plan_files)} plans...")
+    for plan_file in sorted(plan_files):
         create_visualization(
-            os.path.join(analysis_dir, analysis_file), visualizations_dir, output_format
+            os.path.join(plans_dir, plan_file), visualizations_dir, output_format
         )

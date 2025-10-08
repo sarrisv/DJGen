@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 logger = logging.getLogger("djp")
 
+
 def _get_default_config() -> Dict[str, Any]:
     """Get default project configuration"""
 
@@ -19,13 +20,13 @@ def _get_default_config() -> Dict[str, Any]:
                 "name": "default_iteration",
                 "datagen": {
                     "enabled": False,
-                    "tables": [
+                    "relations": [
                         {
-                            "name": "default_table",
+                            "name": "default_relations",
                             "num_rows": 10000,
-                            "columns": [
+                            "attributes": [
                                 {
-                                    "name": "default_col",
+                                    "name": "default_attr",
                                     "dtype": "int64",
                                     "distribution": {
                                         "type": "uniform",
@@ -91,7 +92,9 @@ def parse_config(config_path: str) -> Dict[str, Any]:
         with open(config_path, "rb") as f:
             user_config = tomllib.load(f)
     except FileNotFoundError:
-        logger.debug(f"Warning: Config file not found at '{config_path}'. Using defaults.")
+        logger.debug(
+            f"Warning: Config file not found at '{config_path}'. Using defaults."
+        )
         user_config = {}
     except tomllib.TOMLDecodeError as e:
         raise ValueError(f"Error decoding TOML file '{config_path}': {e}") from e
