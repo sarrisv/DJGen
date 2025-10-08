@@ -1,0 +1,51 @@
+[project]
+name = "Triangle Query"
+output_dir = "output"
+
+[[iterations]]
+name = "triangle"
+
+[iterations.datagen]
+enabled = true
+relations = [
+  { name = "rel0", num_rows = 100, attributes = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel1", num_rows = 100, attributes = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+  { name = "rel2", num_rows = 100, attributes = [
+    { name = "attr0" },
+    { name = "attr1" },
+    { name = "attr2" },
+  ] },
+]
+
+[iterations.plangen]
+visualize = true
+base_plans = [
+  { pattern = "custom", base_plan = [
+    [
+      "rel0",
+      "rel1",
+      "attr0",
+    ],
+    [
+      "rel1",
+      "rel2",
+      "attr1",
+    ],
+    [
+      "rel0",
+      "rel2",
+      "attr2",
+    ],
+  ] },
+]
+
+[iterations.analysis]
+enabled = true

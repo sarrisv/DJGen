@@ -7,7 +7,7 @@ from typing import Any, Dict
 logger = logging.getLogger("djp")
 
 
-def _get_default_config() -> Dict[str, Any]:
+def get_default_config() -> Dict[str, Any]:
     """Get default project configuration"""
 
     return {
@@ -86,7 +86,7 @@ def _merge_configs(default: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, A
 def parse_config(config_path: str) -> Dict[str, Any]:
     """Parse TOML config and merge with defaults"""
 
-    default_config = _get_default_config()
+    default_config = get_default_config()
 
     try:
         with open(config_path, "rb") as f:

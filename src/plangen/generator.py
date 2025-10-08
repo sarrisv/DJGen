@@ -268,9 +268,9 @@ def _generate_sql_from_base_plan(base_plan: BasePlan) -> str:
         where_clauses.append(f"{rel0}.{attr} = {rel1}.{attr}")
 
     from_clause = ", ".join(sorted(list(relations)))
-    where_clause = " AND ".join(where_clauses)
+    where_clause = " AND\n  ".join(where_clauses)
 
-    sql = f"SELECT COUNT(*) FROM {from_clause} WHERE {where_clause};"
+    sql = f"SELECT\n  COUNT(*)\nFROM\n  {from_clause}\nWHERE\n  {where_clause};"
 
     return sql
 
@@ -297,10 +297,20 @@ def generate_join_plans_for_iteration(
 
         logger.debug(f"\t\tGenerating {num_plans} instances of pattern: {pattern}")
 
-        pattern_func = PATTERN_FUNCTIONS[pattern]
-
         for i in range(num_plans):
-            base_plan = pattern_func(rel_configs)
+            base_plan = []
+
+            if pattern == "custom":
+                base_plan = plan_config.get("base_plan")
+                if not base_plan:
+                    logger.warning(
+                        "\t\t\t'pattern' was 'custom' but no 'base_plan' was provided. Skipping."
+                    )
+                    continue
+            else:
+                pattern_func = PATTERN_FUNCTIONS[pattern]
+                base_plan = pattern_func(rel_configs)
+
             plans = [base_plan]
 
             if permutations is not False:

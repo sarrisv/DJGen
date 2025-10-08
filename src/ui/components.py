@@ -1,187 +1,93 @@
 import os
 from typing import List, Dict, Any, Tuple, Optional
 
-import pandas as pd
-import plotly.express as px
 import streamlit as st
 
-from .models import (
+from src.ui.models import (
     CONFIG,
     SORT_OPTIONS,
     VALIDATION_RULES,
     PlanMetadata,
     create_project_config,
     run_djp_generator,
-    get_best_plans_by_type,
     load_plans,
-    create_zip_archive,
-    get_all_data_files,
+    create_toml_string_from_config,
+    update_session_state_from_toml,
+)
+from src.ui.data_tab import render_data_tab
+from src.ui.analysis_tab import render_analysis_tab
+from src.ui.utils import (
+    _render_two_column_layout,
+    _render_standard_button_pair,
+    _render_standard_input_pair,
 )
 
 
-def _render_two_column_layout(left_component, right_component):
-    """Standard two-column layout for paired form elements"""
-    col1, col2 = st.columns(2)
-    with col1:
-        left_result = left_component()
-    with col2:
-        right_result = right_component()
-    return left_result, right_result
+# ==============================================================================
+# 1. High-Level Page Orchestrators
+# ==============================================================================
 
 
-def _render_distribution_params(
-    dist_type: str, key_prefix: str, defaults: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """Standardized distribution parameter input with consistent validation"""
-    defaults = defaults or {}
-    rules = VALIDATION_RULES[dist_type]
+def render_sidebar() -> Dict[str, Any]:
+    """Main sidebar orchestrator with clean separation of concerns"""
+    st.sidebar.title("DJP Generator Configuration")
 
-    if dist_type == "uniform":
+    project_name = _render_project_settings()
+    advanced_mode, rels = _render_mode_and_relations()
 
-        def left():
-            return st.number_input(
-                "Min Value",
-                value=defaults.get("low", 1),
-                min_value=rules["low"]["min"],
-                key=f"{key_prefix}_low",
-            )
+    patterns, pattern_settings = render_pattern_configuration(rels)
+    enable_analysis, enable_visualization, viz_format = render_analysis_options()
 
-        def right():
-            low_val = st.session_state.get(f"{key_prefix}_low", defaults.get("low", 1))
-            return st.number_input(
-                "Max Value",
-                value=defaults.get("high", 1000),
-                min_value=max(low_val + 1, rules["high"]["min"]),
-                key=f"{key_prefix}_high",
-            )
+    current_config = {
+        "project_name": project_name,
+        "advanced_mode": advanced_mode,
+        "relations": rels,
+        "patterns": patterns,
+        "pattern_settings": pattern_settings,
+        "enable_analysis": enable_analysis,
+        "enable_visualization": enable_visualization,
+        "visualization_format": viz_format,
+    }
 
-        low, high = _render_two_column_layout(left, right)
-        return {"low": low, "high": high}
+    _render_config_management_buttons(current_config)
+    run_clicked = _render_sidebar_summary_and_run(patterns, rels)
 
-    elif dist_type == "gaussian":
-
-        def left():
-            return st.number_input(
-                "Mean",
-                value=defaults.get("mean", 100.0),
-                min_value=float(rules["mean"]["min"]),
-                key=f"{key_prefix}_mean",
-            )
-
-        def right():
-            return st.number_input(
-                "Std Deviation",
-                value=defaults.get("std", 20.0),
-                min_value=float(rules["std"]["min"]),
-                key=f"{key_prefix}_std",
-            )
-
-        mean, std = _render_two_column_layout(left, right)
-        return {"mean": mean, "std": std}
-
-    elif dist_type == "zipf":
-        skew = st.number_input(
-            "Skewness",
-            value=defaults.get("skew", 1.5),
-            min_value=float(rules["skew"]["min"]),
-            key=f"{key_prefix}_skew",
-        )
-
-        def left():
-            return st.number_input(
-                "Min Value",
-                value=defaults.get("low", 1),
-                min_value=rules["low"]["min"],
-                key=f"{key_prefix}_low",
-            )
-
-        def right():
-            low_val = st.session_state.get(f"{key_prefix}_low", defaults.get("low", 1))
-            return st.number_input(
-                "Max Value",
-                value=defaults.get("high", 1000),
-                min_value=max(low_val + 1, rules["high"]["min"]),
-                key=f"{key_prefix}_high",
-            )
-
-        low, high = _render_two_column_layout(left, right)
-        return {"skew": skew, "low": low, "high": high}
-
-    elif dist_type == "sequential":
-        start = st.number_input(
-            "Start Value",
-            value=defaults.get("start", 1),
-            min_value=rules["start"]["min"],
-            key=f"{key_prefix}_start",
-        )
-        return {"start": start}
+    current_config["run_clicked"] = run_clicked
+    return current_config
 
 
-def _render_standard_button_pair(
-    left_text: str,
-    right_text: str,
-    left_key: str,
-    right_key: str,
-    right_disabled: bool = False,
-) -> Tuple[bool, bool]:
-    """Standard button pair layout with consistent styling"""
-
-    def left():
-        return st.button(left_text, use_container_width=True, key=left_key)
-
-    def right():
-        return st.button(
-            right_text, disabled=right_disabled, use_container_width=True, key=right_key
-        )
-
-    return _render_two_column_layout(left, right)
+def render_main_content(config: Dict[str, Any]) -> None:
+    """Render main content based on application state"""
+    if config["run_clicked"]:
+        _handle_analysis_execution(config)
+    elif st.session_state.get("running_analysis"):
+        _render_analysis_in_progress()
+    elif st.session_state.get("analysis_results"):
+        _render_analysis_results()
+    else:
+        _render_welcome_content()
 
 
-def _render_standard_input_pair(left_component, right_component):
-    """Standard input pair"""
-
-    def left():
-        return left_component()
-
-    def right():
-        return right_component()
-
-    return _render_two_column_layout(left, right)
+# ==============================================================================
+# 2. Main Content Area Renderers
+# ==============================================================================
 
 
-def _handle_analysis_execution(config: Dict[str, Any]) -> None:
-    """Handle analysis execution pipeline and state management"""
-    st.session_state.update({"running_analysis": True})
+def _render_welcome_content() -> None:
+    """Render the welcome/landing page content"""
+    st.markdown("""
+    # Data & Join Plan Generator
 
-    try:
-        config_dict = create_project_config(
-            config["project_name"],
-            config["relations"],
-            config["patterns"],
-            config["enable_analysis"],
-            config["enable_visualization"],
-            config["visualization_format"],
-            config["pattern_settings"],
-        )
+    **Generate and then analyze synthetic datasets and conjunctive join plans**
 
-        output_dir = run_djp_generator(config_dict)
+    ### Quick Start:
+    + **Configure** your data generation parameters in the sidebar
+    + **Select** join patterns to analyze
+    + **Click** "Generate Analysis" to run the complete pipeline
+    + **Compare** different join strategies and download results
 
-        if output_dir:
-            st.session_state.update(
-                {
-                    "running_analysis": False,
-                    "output_dir": output_dir,
-                    "analysis_results": output_dir,
-                    "visualization_format": config["visualization_format"],
-                }
-            )
-            st.success("Analysis completed successfully!")
-            st.rerun()
-        else:
-            st.session_state.update({"running_analysis": False})
-    except Exception as e:
-        st.error(f"Failed to execute analysis: {str(e)}")
-        st.session_state.update({"running_analysis": False})
+    Use **Simple Mode** for quick setup or **Advanced Mode** for detailed control.
+    """)
 
 
 def _render_analysis_in_progress() -> None:
@@ -189,317 +95,8 @@ def _render_analysis_in_progress() -> None:
     st.info("Analysis in progress...")
 
 
-def _render_welcome_content() -> None:
-    """Render the welcome/landing page content"""
-    st.markdown("""
-    # Data & Join Plan Generator
-    
-    **Generate and then analyze synthetic datasets and conjunctive join plans**
-    
-    ### Quick Start:
-    + **Configure** your data generation parameters in the sidebar
-    + **Select** join patterns to analyze  
-    + **Click** "Generate Analysis" to run the complete pipeline
-    + **Compare** different join strategies and download results
-    
-    Use **Simple Mode** for quick setup or **Advanced Mode** for detailed control.
-    """)
-
-
-def _render_plan_filtering(plans: List[PlanMetadata]) -> Tuple[List[PlanMetadata], str]:
-    """Render plan filtering controls and return filtered plans with sort option"""
-    unique_base_plans = sorted(set(p.base_plan for p in plans))
-    unique_types = sorted(set(p.type for p in plans if p.type != "unknown"))
-
-    st.subheader("Plan Selection")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        base_filter = st.selectbox("Base Plan", ["All"] + unique_base_plans)
-    with col2:
-        type_filter = st.selectbox("Type", ["All"] + unique_types)
-    with col3:
-        sort_by = st.selectbox("Sort By", SORT_OPTIONS)
-
-    # Apply filters and sort
-    filtered_plans = plans
-    if base_filter != "All":
-        filtered_plans = [p for p in filtered_plans if p.base_plan == base_filter]
-    if type_filter != "All":
-        filtered_plans = [p for p in filtered_plans if p.type == type_filter]
-    filtered_plans.sort(key=lambda p: p.get_sort_key(sort_by))
-
-    return filtered_plans, sort_by
-
-
-def _render_plan_comparison_controls(
-    filtered_plans: List[PlanMetadata], sort_by: str
-) -> Tuple[PlanMetadata, PlanMetadata]:
-    """Render plan comparison controls and return selected plans"""
-    # Select best plans button
-    best_binary, best_nary = get_best_plans_by_type(filtered_plans, sort_by)
-    can_select_best = best_binary is not None and best_nary is not None
-
-    if st.button("Select Best Plans", disabled=not can_select_best, type="secondary"):
-        if best_binary and best_nary:
-            st.session_state.update(
-                {
-                    "selected_left_plan": best_binary.get_display_name(),
-                    "selected_right_plan": best_nary.get_display_name(),
-                }
-            )
-            st.rerun()
-
-    # Plan selection with consistent styling
-    st.subheader("Comparison")
-    plan_names = [p.get_display_name() for p in filtered_plans]
-
-    # Get current selections
-    current_left_idx = 0
-    current_right_idx = min(1, len(plan_names) - 1)
-
-    if st.session_state.get("selected_left_plan") in plan_names:
-        current_left_idx = plan_names.index(st.session_state.get("selected_left_plan"))
-    if st.session_state.get("selected_right_plan") in plan_names:
-        current_right_idx = plan_names.index(
-            st.session_state.get("selected_right_plan")
-        )
-
-    def left():
-        return st.selectbox(
-            "Left Plan",
-            plan_names,
-            index=current_left_idx,
-            key="plan_select_left",
-        )
-
-    def right():
-        return st.selectbox(
-            "Right Plan",
-            plan_names,
-            index=current_right_idx,
-            key="plan_select_right",
-        )
-
-    left_name, right_name = _render_two_column_layout(left, right)
-
-    # Update session state
-    st.session_state.update(
-        {"selected_left_plan": left_name, "selected_right_plan": right_name}
-    )
-
-    left_plan = next(p for p in filtered_plans if p.get_display_name() == left_name)
-    right_plan = next(p for p in filtered_plans if p.get_display_name() == right_name)
-
-    return left_plan, right_plan
-
-
-def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
-    """Create plotly charts for a plan with consistent styling"""
-    analysis_section = plan.plan_data.get("analysis", {})
-    stages = analysis_section.get("stages", [])
-    plan_type = plan.plan_data.get("execution_plan", {}).get("type")
-
-    if not stages:
-        return None, None
-
-    # Prepare data for charts
-    stage_data = []
-    for stage in stages:
-        stage_data.append(
-            {
-                "Stage": stage["stage_id"],
-                "Output Size": stage["output_size"],
-                "Selectivity": stage.get("selectivity", 0),
-                "Total Results": stage.get("total_intermediates", 0),
-                "Materialized Results": 0
-                if plan_type == "nary" and stage != stages[-1]
-                else stage.get("total_intermediates", 0),
-            }
-        )
-
-    df = pd.DataFrame(stage_data)
-
-    # Create intermediates chart
-    fig1 = px.bar(
-        df,
-        x="Stage",
-        y="Materialized Results",
-        title=f"{title_prefix} - Cumulative Materialized Results",
-    )
-    fig1.update_layout(height=300)
-
-    # Create selectivity chart
-    fig2 = px.line(
-        df,
-        x="Stage",
-        y="Selectivity",
-        markers=True,
-        title=f"{title_prefix} - Selectivity by Stage",
-    )
-    fig2.update_layout(height=300)
-
-    return fig1, fig2
-
-
-def render_metrics_comparison(left_plan: PlanMetadata, right_plan: PlanMetadata):
-    """Render metrics with standardized 4-column layout"""
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader(f"{left_plan.get_display_name()}")
-        lcol1, lcol2, lcol3, lcol4 = st.columns(4)
-        with lcol1:
-            st.metric("Final Size", f"{left_plan.final_output_size:,}")
-        with lcol2:
-            st.metric("Total Results", f"{left_plan.total_intermediates:,}")
-        with lcol3:
-            st.metric("Max Size", f"{left_plan.max_intermediate_size:,}")
-        with lcol4:
-            st.metric("Avg Selectivity", f"{left_plan.avg_selectivity:.4f}")
-
-    with col2:
-        st.subheader(f"{right_plan.get_display_name()}")
-        rcol1, rcol2, rcol3, rcol4 = st.columns(4)
-
-        with rcol1:
-            delta = right_plan.final_output_size - left_plan.final_output_size
-            st.metric(
-                "Final Size",
-                f"{right_plan.final_output_size:,}",
-                delta=f"{delta:+,}" if delta != 0 else None,
-            )
-        with rcol2:
-            delta = right_plan.total_intermediates - left_plan.total_intermediates
-            st.metric(
-                "Total Results",
-                f"{right_plan.total_intermediates:,}",
-                delta=f"{delta:+,}" if delta != 0 else None,
-            )
-        with rcol3:
-            delta = right_plan.max_intermediate_size - left_plan.max_intermediate_size
-            st.metric(
-                "Max Size",
-                f"{right_plan.max_intermediate_size:,}",
-                delta=f"{delta:+,}" if delta != 0 else None,
-            )
-        with rcol4:
-            delta = right_plan.avg_selectivity - left_plan.avg_selectivity
-            st.metric(
-                "Avg Selectivity",
-                f"{right_plan.avg_selectivity:.4f}",
-                delta=f"{delta:+.4f}" if abs(delta) >= 0.0001 else None,
-            )
-
-
-def render_charts_comparison(left_plan: PlanMetadata, right_plan: PlanMetadata):
-    """Render charts comparison with consistent layout"""
-    st.subheader("Performance Charts")
-
-    # Generate charts for both plans
-    left_fig1, left_fig2 = _create_plan_charts(left_plan, "Left Plan")
-    right_fig1, right_fig2 = _create_plan_charts(right_plan, "Right Plan")
-
-    if left_fig1 and right_fig1:
-        # Display charts in tabs
-        tab1, tab2 = st.tabs(["Intermediate Results", "Selectivity"])
-
-        with tab1:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(left_fig1, use_container_width=True)
-            with col2:
-                st.plotly_chart(right_fig1, use_container_width=True)
-
-        with tab2:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(left_fig2, use_container_width=True)
-            with col2:
-                st.plotly_chart(right_fig2, use_container_width=True)
-
-
-def render_visualizations(
-    left_plan: PlanMetadata, right_plan: PlanMetadata, output_dir: str, viz_format: str
-):
-    """Render join plan visualizations side by side"""
-    viz_dir = os.path.join(output_dir, CONFIG["iteration_name"], "visualizations")
-    if not os.path.exists(viz_dir):
-        return
-
-    st.subheader("Join Plan Visualizations")
-
-    col1, col2 = st.columns(2)
-
-    # Left plan visualization
-    with col1:
-        left_viz_file = f"{left_plan.filename.replace('.json', f'.{viz_format}')}"
-        left_viz_path = os.path.join(viz_dir, left_viz_file)
-        if os.path.exists(left_viz_path):
-            st.image(left_viz_path, caption=left_plan.get_display_name())
-        else:
-            st.info(f"Visualization not found: {left_viz_file}")
-
-    # Right plan visualization
-    with col2:
-        right_viz_file = f"{right_plan.filename.replace('.json', f'.{viz_format}')}"
-        right_viz_path = os.path.join(viz_dir, right_viz_file)
-        if os.path.exists(right_viz_path):
-            st.image(right_viz_path, caption=right_plan.get_display_name())
-        else:
-            st.info(f"Visualization not found: {right_viz_file}")
-
-
-def render_downloads_section(output_dir: str):
-    """Render download section for all analysis results"""
-    st.subheader("Downloads")
-
-    all_files = get_all_data_files(output_dir)
-    if all_files:
-        # Count files by type
-        parquet_count = len([f for f in all_files if f[1].endswith(".parquet")])
-        json_count = len([f for f in all_files if f[1].endswith(".json")])
-        viz_count = len([f for f in all_files if f[1].endswith((".png", ".svg"))])
-
-        st.info(
-            f"{parquet_count} data files, {json_count} JSON files, {viz_count} visualizations"
-        )
-
-        # Create ZIP archive
-        zip_data = create_zip_archive(all_files, "complete_dataset")
-
-        st.download_button(
-            label="Download All Data (ZIP)",
-            data=zip_data,
-            file_name="djp_complete_dataset.zip",
-            mime="application/zip",
-        )
-    else:
-        st.warning("No data files found")
-
-
-def _render_comparison_dashboard(
-    left_plan: PlanMetadata, right_plan: PlanMetadata
-) -> None:
-    """Render the complete comparison dashboard with metrics, charts, and visualizations"""
-    st.divider()
-    render_metrics_comparison(left_plan, right_plan)
-
-    st.divider()
-    render_charts_comparison(left_plan, right_plan)
-
-    st.divider()
-    viz_format = st.session_state.get("visualization_format", "png")
-    render_visualizations(
-        left_plan, right_plan, st.session_state.output_dir, viz_format
-    )
-
-    st.divider()
-    render_downloads_section(st.session_state.output_dir)
-
-
 def _render_analysis_results() -> None:
-    """Render the complete analysis results interface"""
+    """Render the complete analysis results interface with a tabbed layout."""
     st.header("Analysis Results")
 
     plans_dir = os.path.join(
@@ -507,24 +104,44 @@ def _render_analysis_results() -> None:
     )
     plans = load_plans(plans_dir)
 
-    if plans:
-        filtered_plans, sort_by = _render_plan_filtering(plans)
-
-        if filtered_plans:
-            left_plan, right_plan = _render_plan_comparison_controls(
-                filtered_plans, sort_by
-            )
-            _render_comparison_dashboard(left_plan, right_plan)
-        else:
-            st.warning("No plans match the current filters.")
-    else:
+    if not plans:
         st.error("No analysis files found.")
+        return
+
+    analysis_was_run = "analysis" in plans[0].plan_data
+
+    # Render top-level filtering controls that apply to both tabs
+    filtered_plans, sort_by = _render_plan_filtering(plans, analysis_was_run)
+
+    if not filtered_plans:
+        st.warning("No plans match the current filters.")
+        return
+
+    # Create the tabs and delegate rendering to the view modules
+    data_tab, analysis_tab = st.tabs(["Data", "Analysis"])
+
+    with data_tab:
+        render_data_tab(filtered_plans, st.session_state.output_dir)
+
+    with analysis_tab:
+        render_analysis_tab(filtered_plans, sort_by, analysis_was_run)
+
+
+# ==============================================================================
+# 3. Sidebar Renderers
+# ==============================================================================
 
 
 def _render_project_settings() -> str:
     """Render project name input and return the value"""
     st.sidebar.subheader("Project")
-    return st.sidebar.text_input("Project Name", value="Synthetic Data & Join Plans")
+    project_name = st.sidebar.text_input(
+        "Project Name",
+        value=st.session_state.get("project_name", "Synthetic Data & Join Plans"),
+        key="project_name_input",
+    )
+    st.session_state.project_name = project_name
+    return project_name
 
 
 def _render_mode_and_relations() -> Tuple[bool, list]:
@@ -542,37 +159,6 @@ def _render_mode_and_relations() -> Tuple[bool, list]:
         relations = render_simple_mode_config()
 
     return advanced_mode, relations
-
-
-def _render_patterns_and_analysis() -> Tuple[list, dict]:
-    """Render pattern configuration and return patterns with settings"""
-    return render_pattern_configuration()
-
-
-def _render_sidebar_summary_and_run(patterns: list, relations: list) -> bool:
-    """Render sidebar summary validation and run button, return run state"""
-    # Configuration summary
-    st.sidebar.divider()
-    st.sidebar.subheader("Summary")
-    if patterns and relations:
-        st.sidebar.success(f"{len(patterns)} pattern(s) selected")
-        st.sidebar.info(f"{len(relations)} relation(s) configured")
-    else:
-        if not patterns:
-            st.sidebar.warning("Select join patterns")
-        if not relations:
-            st.sidebar.warning("Configure relations")
-
-    # Run button
-    st.sidebar.divider()
-    return st.sidebar.button(
-        "Run",
-        type="primary",
-        disabled=not patterns
-        or not relations
-        or st.session_state.get("running_analysis", False),
-        use_container_width=True,
-    )
 
 
 def render_simple_mode_config():
@@ -650,8 +236,7 @@ def render_advanced_mode_config():
                     {
                         "name": "id",
                         "dtype": "int64",
-                        "distribution_type": "sequential",
-                        "distribution_params": {},
+                        "distribution": {"type": "sequential", "start": 1},
                     }
                 ],
             }
@@ -670,47 +255,206 @@ def render_advanced_mode_config():
     return st.session_state["advanced_relations"]
 
 
-def render_pattern_configuration():
-    """Render pattern configuration with consistent styling"""
-    st.sidebar.subheader("Join Patterns")
+def render_relation_configuration(rel_idx: int, rel: Dict[str, Any]) -> None:
+    """Orchestrate relation configuration with focused helpers"""
+    _render_relation_basics(rel_idx, rel)
+    _handle_attribute_management(rel_idx, rel)
 
-    patterns = st.sidebar.multiselect(
-        "Select Patterns", CONFIG["patterns"], default=CONFIG["default_patterns"]
+    # Render each attribute
+    for j, attr in enumerate(rel["attributes"]):
+        st.write(f"*Attribute {j + 1}:*")
+        render_attribute_configuration(rel_idx, j, attr)
+
+
+def render_attribute_configuration(
+    rel_idx: int, attr_idx: int, attr: Dict[str, Any]
+) -> None:
+    """Render individual attribute configuration with consistent components"""
+    # Attribute basic settings
+    name, dtype = _render_standard_input_pair(
+        lambda: st.text_input(
+            "Name", value=attr["name"], key=f"attribute_name_r{rel_idx}_a{attr_idx}"
+        ),
+        lambda: st.selectbox(
+            "Data Type",
+            CONFIG["data_types"],
+            index=CONFIG["data_types"].index(attr.get("dtype", "int64")),
+            key=f"attribute_dtype_r{rel_idx}_a{attr_idx}",
+        ),
     )
 
-    pattern_settings = {}
-    if patterns:
-        with st.sidebar.expander("Pattern Settings", expanded=False):
-            for pattern in patterns:
-                st.write(f"**{pattern.title()}**")
+    current_distribution = attr.get("distribution", {"type": "uniform"})
+    distribution_type = st.selectbox(
+        "Distribution",
+        CONFIG["distribution_types"],
+        index=CONFIG["distribution_types"].index(
+            current_distribution.get("type", "uniform")
+        ),
+        key=f"attribute_dist_r{rel_idx}_a{attr_idx}",
+    )
 
-                def left():
-                    return st.number_input(
-                        f"Number of {pattern} plans",
+    key_prefix = f"advanced_attribute_r{rel_idx}_a{attr_idx}_{distribution_type}"
+    params = _render_distribution_params(
+        distribution_type, key_prefix, current_distribution
+    )
+
+    attr.update(
+        {
+            "name": name,
+            "dtype": dtype,
+            "distribution": {"type": distribution_type, **params},
+        }
+    )
+
+
+def render_pattern_configuration(relations: list) -> Tuple[list, dict]:
+    """Render pattern configuration, including the custom plan editor."""
+    st.sidebar.subheader("Join Patterns")
+
+    all_patterns = CONFIG["patterns"] + ["custom"]
+
+    # Use a persistent session state key for the multiselect default
+    default_patterns = st.session_state.get(
+        "selected_patterns", CONFIG["default_patterns"]
+    )
+
+    patterns = st.sidebar.multiselect(
+        "Select Patterns", all_patterns, default=default_patterns
+    )
+    # Immediately update the session state with the user's selection
+    st.session_state.selected_patterns = patterns
+
+    pattern_settings = {}
+
+    # Render settings for standard patterns
+    standard_patterns = [p for p in patterns if p != "custom"]
+    if standard_patterns:
+        with st.sidebar.expander("Standard Pattern Settings", expanded=False):
+            for pattern in standard_patterns:
+                st.write(f"**{pattern.title()}**")
+                num_plans, perms = _render_two_column_layout(
+                    lambda: st.number_input(
+                        f"Number of plans",
                         min_value=1,
                         max_value=5,
-                        value=1,
-                        key=f"pattern_plans_{pattern}",
-                    )
-
-                def right():
-                    return st.toggle(
-                        "Permutations", value=True, key=f"pattern_perms_{pattern}"
-                    )
-
-                num_plans, permutations = _render_two_column_layout(left, right)
+                        value=st.session_state.get(f"num_{pattern}", 1),
+                        key=f"num_{pattern}",
+                    ),
+                    lambda: st.toggle(
+                        "Permutations",
+                        value=st.session_state.get(f"perms_{pattern}", True),
+                        key=f"perms_{pattern}",
+                    ),
+                )
                 pattern_settings[f"pattern_num_plans_{pattern}"] = num_plans
-                pattern_settings[f"pattern_permutations_{pattern}"] = permutations
+                pattern_settings[f"pattern_permutations_{pattern}"] = perms
+
+    # Render the custom plan editor if "custom" is selected
+    if "custom" in patterns:
+        custom_settings = _render_custom_plan_editor(relations)
+        pattern_settings.update(custom_settings)
 
     return patterns, pattern_settings
 
 
+def _render_custom_plan_editor(relations: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Render the UI for creating a custom join plan."""
+    settings = {}
+    with st.sidebar.expander("Custom Plan Editor", expanded=True):
+        if "custom_joins" not in st.session_state:
+            st.session_state.custom_joins = []
+
+        # Add/Remove buttons
+        add, remove = _render_two_column_layout(
+            lambda: st.button("Add Join", use_container_width=True),
+            lambda: st.button(
+                "Remove Last Join",
+                use_container_width=True,
+                disabled=not st.session_state.custom_joins,
+            ),
+        )
+        if add:
+            st.session_state.custom_joins.append(["", "", ""])
+            st.rerun()
+        if remove:
+            st.session_state.custom_joins.pop()
+            st.rerun()
+
+        # Render each join row
+        for i, join in enumerate(st.session_state.custom_joins):
+            st.markdown(f"**Join {i + 1}**")
+            rel_names = [r["name"] for r in relations]
+
+            # Use columns for layout
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                join[0] = st.selectbox(
+                    "Rel 1",
+                    rel_names,
+                    index=rel_names.index(join[0]) if join[0] in rel_names else 0,
+                    key=f"cust_rel1_{i}",
+                )
+            with col2:
+                join[1] = st.selectbox(
+                    "Rel 2",
+                    rel_names,
+                    index=rel_names.index(join[1]) if join[1] in rel_names else 0,
+                    key=f"cust_rel2_{i}",
+                )
+
+            common_attrs = _get_common_attributes(join[0], join[1], relations)
+            with col3:
+                join[2] = st.selectbox(
+                    "On Attr",
+                    common_attrs,
+                    index=common_attrs.index(join[2]) if join[2] in common_attrs else 0,
+                    key=f"cust_attr_{i}",
+                )
+
+        # Permutation settings for the custom plan
+        st.markdown("**Permutations**")
+        perms = st.toggle(
+            "Permutations",
+            value=st.session_state.get("perms_custom", False),
+            key="perms_custom",
+        )
+        settings["pattern_permutations_custom"] = perms
+
+    return settings
+
+
+def _get_common_attributes(
+    rel1_name: str, rel2_name: str, relations: List[Dict[str, Any]]
+) -> List[str]:
+    """Helper to find common attributes between two relations."""
+    if not rel1_name or not rel2_name or not relations:
+        return []
+
+    try:
+        rel1 = next((r for r in relations if r["name"] == rel1_name), None)
+        rel2 = next((r for r in relations if r["name"] == rel2_name), None)
+        if not rel1 or not rel2:
+            return []
+
+        rel1_attrs = {attr["name"] for attr in rel1.get("attributes", [])}
+        rel2_attrs = {attr["name"] for attr in rel2.get("attributes", [])}
+
+        return sorted(list(rel1_attrs.intersection(rel2_attrs)))
+    except (StopIteration, KeyError):
+        return []
+
+
 def render_analysis_options():
     """Render analysis options with consistent styling"""
-    st.sidebar.subheader("Analysis Options")
+    st.sidebar.subheader("Analysis & Visualization")
 
-    enable_analysis = True  # Always enabled
-    enable_visualization = True  # Always enabled
+    enable_analysis = st.sidebar.toggle("Run Performance Analysis", value=True)
+    enable_visualization = st.sidebar.toggle("Visualize Join Plans", value=True)
+
+    if not enable_analysis and enable_visualization:
+        st.sidebar.info(
+            "Visualizations will not include performance metrics if analysis is disabled."
+        )
 
     viz_format = st.sidebar.selectbox(
         "Visualization Format", CONFIG["viz_formats"], index=0
@@ -719,19 +463,195 @@ def render_analysis_options():
     return enable_analysis, enable_visualization, viz_format
 
 
-def _render_relation_basics(rel_idx: int, rel: Dict[str, Any]) -> None:
-    """Render relation name and row count inputs"""
+def _render_config_management_buttons(config: Dict[str, Any]) -> None:
+    """Render config upload and download buttons."""
+    st.sidebar.subheader("Configuration")
 
-    def left():
-        return st.text_input("Name", value=rel["name"], key=f"rel_name_r{rel_idx}")
+    # Upload Button
+    st.sidebar.file_uploader(
+        "Upload Config",
+        type=["toml"],
+        accept_multiple_files=False,
+        key="config_uploader",
+        on_change=_handle_config_upload,
+    )
 
-    def right():
-        return st.selectbox(
-            "Rows", CONFIG["row_options"], index=2, key=f"rel_rows_r{rel_idx}"
+    # Download Button
+    toml_string = create_toml_string_from_config(config)
+    st.sidebar.download_button(
+        label="Download Config",
+        data=toml_string,
+        file_name="config.toml",
+        mime="text/toml",
+        use_container_width=True,
+    )
+
+
+def _render_sidebar_summary_and_run(patterns: list, relations: list) -> bool:
+    """Render sidebar summary validation and run button, return run state"""
+    # Configuration summary
+    st.sidebar.divider()
+    st.sidebar.subheader("Summary")
+    if patterns and relations:
+        st.sidebar.success(f"{len(patterns)} pattern(s) selected")
+        st.sidebar.info(f"{len(relations)} relation(s) configured")
+    else:
+        if not patterns:
+            st.sidebar.warning("Select join patterns")
+        if not relations:
+            st.sidebar.warning("Configure relations")
+
+    # Run button
+    st.sidebar.divider()
+    return st.sidebar.button(
+        "Generate",
+        type="primary",
+        disabled=not patterns
+        or not relations
+        or st.session_state.get("running_analysis", False),
+        use_container_width=True,
+    )
+
+
+# ==============================================================================
+# 4. Component-Specific Helpers
+# ==============================================================================
+
+
+def _render_plan_filtering(
+    plans: List[PlanMetadata], analysis_was_run: bool
+) -> Tuple[List[PlanMetadata], str]:
+    """Render plan filtering controls, conditionally showing sort options."""
+    unique_base_plans = sorted(set(p.base_plan for p in plans))
+    unique_types = sorted(set(p.type for p in plans if p.type != "unknown"))
+    sort_by = "Name (alphabetical)"
+
+    st.subheader("Filter Plans")
+
+    # Adjust layout based on whether analysis was run
+    num_cols = 3 if analysis_was_run else 2
+    cols = st.columns(num_cols)
+
+    with cols[0]:
+        base_filter = st.selectbox("Base Plan", ["All"] + unique_base_plans)
+    with cols[1]:
+        type_filter = st.selectbox("Type", ["All"] + unique_types)
+    if analysis_was_run:
+        with cols[2]:
+            sort_by = st.selectbox("Sort By", SORT_OPTIONS)
+
+    # Apply filters
+    filtered_plans = plans
+    if base_filter != "All":
+        filtered_plans = [p for p in filtered_plans if p.base_plan == base_filter]
+    if type_filter != "All":
+        filtered_plans = [p for p in filtered_plans if p.type == type_filter]
+
+    # Apply sort
+    filtered_plans.sort(key=lambda p: p.get_sort_key(sort_by))
+
+    return filtered_plans, sort_by
+
+
+def _render_distribution_params(
+    dist_type: str, key_prefix: str, defaults: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Standardized distribution parameter input with consistent validation"""
+    defaults = defaults or {}
+    rules = VALIDATION_RULES.get(dist_type, {})
+
+    if dist_type == "uniform":
+
+        def left():
+            return st.number_input(
+                "Min Value",
+                value=defaults.get("low", 1),
+                min_value=rules.get("low", {}).get("min", 0),
+                key=f"{key_prefix}_low",
+            )
+
+        def right():
+            low_val = st.session_state.get(f"{key_prefix}_low", defaults.get("low", 1))
+            return st.number_input(
+                "Max Value",
+                value=defaults.get("high", 1000),
+                min_value=max(low_val + 1, rules.get("high", {}).get("min", 1)),
+                key=f"{key_prefix}_high",
+            )
+
+        low, high = _render_two_column_layout(left, right)
+        return {"low": low, "high": high}
+
+    elif dist_type == "gaussian":
+
+        def left():
+            return st.number_input(
+                "Mean",
+                value=defaults.get("mean", 100.0),
+                min_value=float(rules.get("mean", {}).get("min", 0.0)),
+                key=f"{key_prefix}_mean",
+            )
+
+        def right():
+            return st.number_input(
+                "Std Deviation",
+                value=defaults.get("std", 20.0),
+                min_value=float(rules.get("std", {}).get("min", 0.1)),
+                key=f"{key_prefix}_std",
+            )
+
+        mean, std = _render_two_column_layout(left, right)
+        return {"mean": mean, "std": std}
+
+    elif dist_type == "zipf":
+        skew = st.number_input(
+            "Skewness",
+            value=defaults.get("skew", 1.5),
+            min_value=float(rules.get("skew", {}).get("min", 1.0)),
+            key=f"{key_prefix}_skew",
         )
 
-    st.write("**Relation:**")
-    name, rows = _render_standard_input_pair(left, right)
+        def left():
+            return st.number_input(
+                "Min Value",
+                value=defaults.get("low", 1),
+                min_value=rules.get("low", {}).get("min", 0),
+                key=f"{key_prefix}_low",
+            )
+
+        def right():
+            low_val = st.session_state.get(f"{key_prefix}_low", defaults.get("low", 1))
+            return st.number_input(
+                "Max Value",
+                value=defaults.get("high", 1000),
+                min_value=max(low_val + 1, rules.get("high", {}).get("min", 1)),
+                key=f"{key_prefix}_high",
+            )
+
+        low, high = _render_two_column_layout(left, right)
+        return {"skew": skew, "low": low, "high": high}
+
+    elif dist_type == "sequential":
+        start = st.number_input(
+            "Start Value",
+            value=defaults.get("start", 1),
+            min_value=rules.get("start", {}).get("min", 0),
+            key=f"{key_prefix}_start",
+        )
+        return {"start": start}
+
+
+def _render_relation_basics(rel_idx: int, rel: Dict[str, Any]) -> None:
+    """Render relation name and row count inputs"""
+    name, rows = _render_standard_input_pair(
+        lambda: st.text_input("Name", value=rel["name"], key=f"rel_name_r{rel_idx}"),
+        lambda: st.selectbox(
+            "Rows",
+            CONFIG["row_options"],
+            index=CONFIG["row_options"].index(rel.get("num_rows", 1000)),
+            key=f"rel_rows_r{rel_idx}",
+        ),
+    )
     rel.update({"name": name, "num_rows": rows})
 
 
@@ -751,8 +671,7 @@ def _handle_attribute_management(rel_idx: int, rel: Dict[str, Any]) -> None:
             {
                 "name": f"attr{len(rel['attributes'])}",
                 "dtype": "int64",
-                "distribution_type": "uniform",
-                "distribution_params": {},
+                "distribution": {"type": "uniform"},
             }
         )
         st.rerun()
@@ -762,93 +681,49 @@ def _handle_attribute_management(rel_idx: int, rel: Dict[str, Any]) -> None:
         st.rerun()
 
 
-def render_relation_configuration(rel_idx: int, rel: Dict[str, Any]) -> None:
-    """Orchestrate relation configuration with focused helpers"""
-    _render_relation_basics(rel_idx, rel)
-    _handle_attribute_management(rel_idx, rel)
-
-    # Render each attribute
-    for j, attr in enumerate(rel["attributes"]):
-        st.write(f"*Attribute {j + 1}:*")
-        render_attribute_configuration(rel_idx, j, attr)
+# ==============================================================================
+# 6. Callback and Handler Functions
+# ==============================================================================
 
 
-def render_attribute_configuration(
-    rel_idx: int, attr_idx: int, attr: Dict[str, Any]
-) -> None:
-    """Render individual attribute configuration with consistent components"""
+def _handle_config_upload():
+    """Callback to process the uploaded TOML file from session_state."""
+    uploaded_file = st.session_state.get("config_uploader")
+    if uploaded_file is not None:
+        file_content = uploaded_file.getvalue()
+        update_session_state_from_toml(file_content)
 
-    # Attribute basic settings
-    def left():
-        return st.text_input(
-            "Name", value=attr["name"], key=f"attribute_name_r{rel_idx}_a{attr_idx}"
+
+def _handle_analysis_execution(config: Dict[str, Any]) -> None:
+    """Handle analysis execution pipeline and state management"""
+    st.session_state.update({"running_analysis": True})
+
+    try:
+        config_dict = create_project_config(
+            config["project_name"],
+            config["relations"],
+            config["patterns"],
+            config["enable_analysis"],
+            config["enable_visualization"],
+            config["visualization_format"],
+            config["pattern_settings"],
         )
 
-    def right():
-        return st.selectbox(
-            "Data Type",
-            CONFIG["data_types"],
-            index=CONFIG["data_types"].index(attr.get("dtype", "int64")),
-            key=f"attribute_dtype_r{rel_idx}_a{attr_idx}",
-        )
+        output_dir = run_djp_generator(config_dict)
 
-    name, dtype = _render_standard_input_pair(left, right)
-
-    distribution_type = st.selectbox(
-        "Distribution",
-        CONFIG["distribution_types"],
-        index=CONFIG["distribution_types"].index(
-            attr.get("distribution_type", "uniform")
-        ),
-        key=f"attribute_dist_r{rel_idx}_a{attr_idx}",
-    )
-
-    # Distribution parameters with consistent styling
-    key_prefix = f"advanced_attribute_r{rel_idx}_a{attr_idx}_{distribution_type}"
-    params = _render_distribution_params(
-        distribution_type, key_prefix, attr.get("distribution_params", {})
-    )
-
-    attr.update(
-        {
-            "name": name,
-            "dtype": dtype,
-            "distribution_type": distribution_type,
-            "distribution_params": params,
-        }
-    )
-
-
-def render_sidebar() -> Dict[str, Any]:
-    """Main sidebar orchestrator with clean separation of concerns"""
-    st.sidebar.title("DJP Generator Configuration")
-
-    project_name = _render_project_settings()
-    advanced_mode, rels = _render_mode_and_relations()
-    patterns, pattern_settings = _render_patterns_and_analysis()
-    enable_analysis, enable_visualization, viz_format = render_analysis_options()
-    run_clicked = _render_sidebar_summary_and_run(patterns, rels)
-
-    return {
-        "project_name": project_name,
-        "advanced_mode": advanced_mode,
-        "relations": rels,
-        "patterns": patterns,
-        "pattern_settings": pattern_settings,
-        "enable_analysis": enable_analysis,
-        "enable_visualization": enable_visualization,
-        "visualization_format": viz_format,
-        "run_clicked": run_clicked,
-    }
-
-
-def render_main_content(config: Dict[str, Any]) -> None:
-    """Render main content based on application state"""
-    if config["run_clicked"]:
-        _handle_analysis_execution(config)
-    elif st.session_state.get("running_analysis"):
-        _render_analysis_in_progress()
-    elif st.session_state.get("analysis_results"):
-        _render_analysis_results()
-    else:
-        _render_welcome_content()
+        if output_dir:
+            st.session_state.update(
+                {
+                    "running_analysis": False,
+                    "output_dir": output_dir,
+                    "analysis_results": output_dir,
+                    "visualization_format": config["visualization_format"],
+                }
+            )
+            st.success("Generation completed successfully!")
+            st.rerun()
+        else:
+            st.session_state.update({"running_analysis": False})
+    except Exception as e:
+        st.error(f"Failed to execute analysis: {str(e)}")
+        st.session_state.update({"running_analysis": False})

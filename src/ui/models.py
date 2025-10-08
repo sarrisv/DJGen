@@ -7,11 +7,14 @@ import zipfile
 from typing import Optional, List, Dict, Any, Tuple
 
 import streamlit as st
+import toml
+import tomllib
 
 from src.analysis import generate_analysis_for_iteration
 from src.datagen import generate_data_for_iteration
 from src.plangen import generate_join_plans_for_iteration
 from src.visualization import create_visualizations_for_plans
+from src.utils.toml_parser import get_default_config
 
 CONFIG = {
     "temp_prefix": "djp_web_",
@@ -52,6 +55,38 @@ VALIDATION_RULES = {
         "start": {"min": 0, "help": "Starting value for sequential numbering"}
     },
 }
+
+
+def _load_and_process_defaults() -> Dict[str, Any]:
+    """
+    Loads the master default configuration from the toml_parser
+    and flattens it into a simple structure for UI comparisons.
+    """
+    full_defaults = get_default_config()
+
+    # Extract the template objects from the full config
+    default_iteration = full_defaults["iterations"][0]
+    default_attribute = default_iteration["datagen"]["relations"][0]["attributes"][0]
+    default_plangen = default_iteration["plangen"]
+    default_base_plan = default_plangen["base_plans"][0]
+
+    return {
+        "attribute": {
+            "dtype": default_attribute["dtype"],
+            "distribution": default_attribute["distribution"],
+        },
+        "base_plan": {
+            "num_plans": default_base_plan["num_plans"],
+            "permutations": default_base_plan["permutations"],
+        },
+        "plangen": {
+            "visualize": default_plangen["visualize"],
+            "visualization_format": default_plangen["visualization_format"],
+        },
+    }
+
+
+DEFAULTS = _load_and_process_defaults()
 
 
 class PlanMetadata:
@@ -146,6 +181,129 @@ class PlanMetadata:
             return self.get_display_name()
 
 
+def create_toml_string_from_config(config: Dict[str, Any]) -> str:
+    """Generate a TOML string from the current UI configuration."""
+    datagen_relations = []
+    for rel in config["relations"]:
+        new_rel = {"name": rel["name"], "num_rows": rel["num_rows"], "attributes": []}
+        for attr in rel.get("attributes", []):
+            attr_to_write = {"name": attr["name"], "distribution": attr["distribution"]}
+            if attr.get("dtype") != DEFAULTS["attribute"]["dtype"]:
+                attr_to_write["dtype"] = attr["dtype"]
+            new_rel["attributes"].append(attr_to_write)
+        datagen_relations.append(new_rel)
+
+    base_plans = []
+    plan_settings = config["pattern_settings"]
+    for pattern in config["patterns"]:
+        if pattern == "custom":
+            # Handle the custom plan from session state
+            custom_plan_data = st.session_state.get("custom_joins", [])
+            # Filter out incomplete joins before saving
+            valid_joins = [j for j in custom_plan_data if all(j)]
+            if valid_joins:
+                base_plans.append(
+                    {
+                        "pattern": "custom",
+                        "base_plan": valid_joins,
+                        "permutations": plan_settings.get(
+                            "pattern_permutations_custom", False
+                        ),
+                    }
+                )
+        else:
+            # Handle standard patterns
+            base_plans.append(
+                {
+                    "pattern": pattern,
+                    "num_plans": plan_settings.get(f"pattern_num_plans_{pattern}", 1),
+                    "permutations": plan_settings.get(
+                        f"pattern_permutations_{pattern}", False
+                    ),
+                }
+            )
+
+    plangen_config = {
+        "enabled": True,
+        "visualize": config["enable_visualization"],
+        "visualization_format": config["visualization_format"],
+        "base_plans": base_plans,
+    }
+
+    toml_config = {
+        "project": {"name": config["project_name"], "output_dir": "output"},
+        "iterations": [
+            {
+                "name": CONFIG["iteration_name"],
+                "datagen": {"enabled": True, "relations": datagen_relations},
+                "plangen": plangen_config,
+                "analysis": {"enabled": config["enable_analysis"]},
+            }
+        ],
+    }
+    return toml.dumps(toml_config)
+
+
+def update_session_state_from_toml(file_content: bytes) -> None:
+    """Parse a TOML file and update the session state to match."""
+    try:
+        user_config = tomllib.loads(file_content.decode("utf-8"))
+
+        st.session_state.project_name = user_config.get("project", {}).get(
+            "name", "Imported Project"
+        )
+        st.session_state.advanced_mode = True
+        iteration = user_config.get("iterations", [{}])[0]
+
+        # Update relations
+        relations = iteration.get("datagen", {}).get("relations", [])
+        advanced_relations = []
+        for rel in relations:
+            new_rel = {
+                "name": rel["name"],
+                "num_rows": rel["num_rows"],
+                "attributes": [],
+            }
+            for attr in rel.get("attributes", []):
+                new_attr = {
+                    "name": attr["name"],
+                    "dtype": attr.get("dtype", "int64"),
+                    "distribution": attr.get("distribution", {"type": "uniform"}),
+                }
+                new_rel["attributes"].append(new_attr)
+            advanced_relations.append(new_rel)
+        st.session_state.advanced_relations = advanced_relations
+
+        # Update patterns and their settings
+        base_plans = iteration.get("plangen", {}).get("base_plans", [])
+        loaded_patterns = []
+        st.session_state.custom_joins = []
+        for bp in base_plans:
+            pattern = bp["pattern"]
+            if pattern == "custom":
+                loaded_patterns.append("custom")
+                st.session_state.custom_joins = bp.get("base_plan", [])
+                st.session_state["perms_custom"] = bp.get("permutations", False)
+            else:
+                loaded_patterns.append(pattern)
+                st.session_state[f"num_{pattern}"] = bp.get("num_plans", 1)
+                st.session_state[f"perms_{pattern}"] = bp.get("permutations", False)
+
+        # This key will be picked up by the multiselect widget on the next rerun
+        st.session_state.selected_patterns = loaded_patterns
+
+        plangen_config = iteration.get("plangen", {})
+        st.session_state.enable_visualization = plangen_config.get("visualize", True)
+        st.session_state.visualization_format = plangen_config.get(
+            "visualization_format", "png"
+        )
+
+        st.success("Configuration loaded successfully!")
+
+    except Exception as e:
+        st.error(f"Failed to parse configuration file: {e}")
+
+
 def init_session_state() -> None:
     """Initialize all session state with comprehensive defaults"""
     defaults = {
@@ -157,6 +315,8 @@ def init_session_state() -> None:
         "advanced_mode": False,
         "advanced_relations": [],
         "visualization_format": "png",
+        "custom_joins": [],
+        "selected_patterns": CONFIG["default_patterns"],
     }
 
     for key, default in defaults.items():
@@ -176,15 +336,31 @@ def create_project_config(
     """Create project configuration with consistent structure"""
     base_plans = []
     for pattern in patterns:
-        base_plans.append(
-            {
-                "pattern": pattern,
-                "num_plans": pattern_settings.get(f"pattern_num_plans_{pattern}", 1),
-                "permutations": pattern_settings.get(
-                    f"pattern_permutations_{pattern}", False
-                ),
-            }
-        )
+        if pattern == "custom":
+            custom_plan_data = st.session_state.get("custom_joins", [])
+            valid_joins = [j for j in custom_plan_data if all(j)]
+            if valid_joins:
+                base_plans.append(
+                    {
+                        "pattern": "custom",
+                        "base_plan": valid_joins,
+                        "permutations": pattern_settings.get(
+                            "pattern_permutations_custom", False
+                        ),
+                    }
+                )
+        else:
+            base_plans.append(
+                {
+                    "pattern": pattern,
+                    "num_plans": pattern_settings.get(
+                        f"pattern_num_plans_{pattern}", 1
+                    ),
+                    "permutations": pattern_settings.get(
+                        f"pattern_permutations_{pattern}", False
+                    ),
+                }
+            )
 
     return {
         "project": {"name": project_name, "output_dir": "output"},
