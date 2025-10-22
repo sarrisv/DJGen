@@ -18,6 +18,7 @@ def get_default_config() -> Dict[str, Any]:
         "iterations": [
             {
                 "name": "default_iteration",
+                "seed": None,
                 "datagen": {
                     "enabled": False,
                     "relations": [
@@ -31,6 +32,7 @@ def get_default_config() -> Dict[str, Any]:
                                     "distribution": {
                                         "type": "uniform",
                                     },
+                                    "null_ratio": 0,
                                 }
                             ],
                         }

@@ -29,6 +29,8 @@ def run_iterations(config: Dict[str, Any]) -> None:
 
     for iter_config in config["iterations"]:
         iter_name = iter_config["name"]
+        seed = iter_config["seed"]
+
         logger.info(64 * "=")
         logger.info(f"ITERATION: {iter_name}")
         output_dir = os.path.join(config["project"]["output_dir"], iter_name)
@@ -36,7 +38,7 @@ def run_iterations(config: Dict[str, Any]) -> None:
         datagen_config = iter_config.get("datagen", {})
         if datagen_config.get("enabled", False):
             logger.info("\tGenerating data...")
-            generate_data_for_iteration(datagen_config, output_dir)
+            generate_data_for_iteration(datagen_config, output_dir, seed=seed)
         else:
             logger.debug("\tDatagen not enabled for this iteration")
 
@@ -44,7 +46,7 @@ def run_iterations(config: Dict[str, Any]) -> None:
         if plangen_config.get("enabled", False):
             logger.info("\tGenerating join plans...")
             generate_join_plans_for_iteration(
-                plangen_config, datagen_config, output_dir
+                plangen_config, datagen_config, output_dir, seed=seed
             )
         else:
             logger.debug("\tPlangen not enabled for this iteration")

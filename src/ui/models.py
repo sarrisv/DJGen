@@ -19,12 +19,13 @@ from src.utils.toml_parser import get_default_config
 CONFIG = {
     "temp_prefix": "djp_web_",
     "iteration_name": "web_generated",
-    "patterns": ["star", "linear", "cyclic", "random"],
+    "seed": None,
+    "patterns": ["star", "linear", "cyclic", "random", "custom"],
     "default_patterns": ["star", "linear"],
-    "rel_limits": {"min": 3, "max": 10, "default": 5},
+    "rel_limits": {"min": 3, "max": 50, "default": 5},
     "row_options": [10, 100, 1000, 10000, 100000],
     "viz_formats": ["png", "svg"],
-    "attribute_limits": {"min": 3, "max": 10, "default": 5},
+    "attribute_limits": {"min": 3, "max": 50, "default": 5},
     "distribution_types": ["sequential", "uniform", "gaussian", "zipf"],
     "data_types": ["int32", "int64", "float32", "float64"],
 }
@@ -190,6 +191,8 @@ def create_toml_string_from_config(config: Dict[str, Any]) -> str:
             attr_to_write = {"name": attr["name"], "distribution": attr["distribution"]}
             if attr.get("dtype") != DEFAULTS["attribute"]["dtype"]:
                 attr_to_write["dtype"] = attr["dtype"]
+            if attr.get("null_ratio", 0) > 0:
+                attr_to_write["null_ratio"] = attr["null_ratio"]
             new_rel["attributes"].append(attr_to_write)
         datagen_relations.append(new_rel)
 
@@ -230,17 +233,19 @@ def create_toml_string_from_config(config: Dict[str, Any]) -> str:
         "base_plans": base_plans,
     }
 
+    iteration_config = {
+        "name": CONFIG["iteration_name"],
+        "seed": CONFIG["seed"],
+        "datagen": {"enabled": True, "relations": datagen_relations},
+        "plangen": plangen_config,
+        "analysis": {"enabled": config["enable_analysis"]},
+    }
+
     toml_config = {
         "project": {"name": config["project_name"], "output_dir": "output"},
-        "iterations": [
-            {
-                "name": CONFIG["iteration_name"],
-                "datagen": {"enabled": True, "relations": datagen_relations},
-                "plangen": plangen_config,
-                "analysis": {"enabled": config["enable_analysis"]},
-            }
-        ],
+        "iterations": [iteration_config],
     }
+
     return toml.dumps(toml_config)
 
 
@@ -254,6 +259,7 @@ def update_session_state_from_toml(file_content: bytes) -> None:
         )
         st.session_state.advanced_mode = True
         iteration = user_config.get("iterations", [{}])[0]
+        st.session_state.seed = iteration.get("seed", None)
 
         # Update relations
         relations = iteration.get("datagen", {}).get("relations", [])
@@ -269,6 +275,7 @@ def update_session_state_from_toml(file_content: bytes) -> None:
                     "name": attr["name"],
                     "dtype": attr.get("dtype", "int64"),
                     "distribution": attr.get("distribution", {"type": "uniform"}),
+                    "null_ratio": attr.get("null_ratio", 0),
                 }
                 new_rel["attributes"].append(new_attr)
             advanced_relations.append(new_rel)
@@ -307,6 +314,7 @@ def update_session_state_from_toml(file_content: bytes) -> None:
 def init_session_state() -> None:
     """Initialize all session state with comprehensive defaults"""
     defaults = {
+        "seed": CONFIG["seed"],
         "analysis_results": None,
         "output_dir": None,
         "running_analysis": False,
@@ -326,6 +334,7 @@ def init_session_state() -> None:
 
 def create_project_config(
     project_name: str,
+    seed: int,
     relations: List[Dict[str, Any]],
     patterns: List[str],
     enable_analysis: bool,
@@ -362,21 +371,22 @@ def create_project_config(
                 }
             )
 
+    iteration = {
+        "name": CONFIG["iteration_name"],
+        "seed": CONFIG["seed"],
+        "datagen": {"enabled": True, "relations": relations},
+        "plangen": {
+            "enabled": True,
+            "visualize": enable_visualization,
+            "visualization_format": visualization_format,
+            "base_plans": base_plans,
+        },
+        "analysis": {"enabled": enable_analysis},
+    }
+
     return {
         "project": {"name": project_name, "output_dir": "output"},
-        "iterations": [
-            {
-                "name": CONFIG["iteration_name"],
-                "datagen": {"enabled": True, "relations": relations},
-                "plangen": {
-                    "enabled": True,
-                    "visualize": enable_visualization,
-                    "visualization_format": visualization_format,
-                    "base_plans": base_plans,
-                },
-                "analysis": {"enabled": enable_analysis},
-            }
-        ],
+        "iterations": [iteration],
     }
 
 
@@ -388,17 +398,18 @@ def run_djp_generator(config_dict: Dict[str, Any]) -> Optional[str]:
         for iter_config in config_dict["iterations"]:
             iter_name = iter_config["name"]
             output_dir = os.path.join(temp_dir, iter_name)
+            seed = iter_config.get("seed")
 
             datagen_config = iter_config.get("datagen", {})
             if datagen_config.get("enabled", False):
                 with st.spinner("Generating data..."):
-                    generate_data_for_iteration(datagen_config, output_dir)
+                    generate_data_for_iteration(datagen_config, output_dir, seed=seed)
 
             plangen_config = iter_config.get("plangen", {})
             if plangen_config.get("enabled", False):
                 with st.spinner("Generating join plans..."):
                     generate_join_plans_for_iteration(
-                        plangen_config, datagen_config, output_dir
+                        plangen_config, datagen_config, output_dir, seed=seed
                     )
 
             analysis_config = iter_config.get("analysis", {})

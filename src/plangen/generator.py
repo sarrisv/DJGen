@@ -279,7 +279,14 @@ def generate_join_plans_for_iteration(
     plangen_config: Dict[str, Any],
     datagen_config: Dict[str, Any],
     output_dir: str,
+    seed: int | None = None,
 ) -> None:
+    """Generate all join plans for iteration"""
+
+    if seed is not None:
+        logger.debug(f"\t\tSeeding Dask with random seed: {seed}")
+        random.seed(seed)
+
     plans_output_path = os.path.join(output_dir, "plans")
     os.makedirs(plans_output_path, exist_ok=True)
 
@@ -345,7 +352,7 @@ def generate_join_plans_for_iteration(
                 ]:
                     plan_name = f"{pattern}{i}_p{j}_{plan_type}"
                     output_doc = {
-                        "query_id": plan_name,
+                        "plan_id": plan_name,
                         "catalog": catalog,
                         "query": {"base_plan": plan, "sql": sql_query},
                         "filters": [],

@@ -216,7 +216,7 @@ def create_visualization(
     with open(plan_path, "r") as f:
         plan = json.load(f)
 
-    plan_name = plan["query_id"]
+    plan_name = plan["plan_id"]
     execution_plan = plan["execution_plan"]
     base_relations = {
         name: details["statistics"]["cardinality"]

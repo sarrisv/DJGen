@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import dask.array as da
 import dask.dataframe as dd
@@ -75,7 +75,7 @@ def _generate_attribute(
     attr_df.name = attr_config["name"]
 
     null_ratio = attr_config.get("null_ratio", 0)
-    if 0 < null_ratio < 1:
+    if 0 < null_ratio <= 1:
         # Create a boolean mask to introduce nulls into the attribute
         mask = da.random.random(size=num_rows, chunks=chunk_size) < null_ratio
         attr_df = attr_df.mask(dd.from_dask_array(mask))
@@ -117,9 +117,13 @@ def _generate_relation(rel_config: Dict[str, Any]) -> dd.DataFrame:
 
 
 def generate_data_for_iteration(
-    datagen_config: Dict[str, Any], output_dir: str
+    datagen_config: Dict[str, Any], output_dir: str, seed: int | None = None
 ) -> Dict[str, str]:
     """Generate all relations for iteration"""
+
+    if seed is not None:
+        logger.debug(f"\t\tSeeding Dask with random seed: {seed}")
+        da.random.seed(seed)
 
     rel_paths = {}
     data_output_path = os.path.join(output_dir, "data")

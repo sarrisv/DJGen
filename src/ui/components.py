@@ -32,7 +32,7 @@ def render_sidebar() -> Dict[str, Any]:
     """Main sidebar orchestrator with clean separation of concerns"""
     st.sidebar.title("DJP Generator Configuration")
 
-    project_name = _render_project_settings()
+    project_name, seed = _render_project_settings()
     advanced_mode, rels = _render_mode_and_relations()
 
     patterns, pattern_settings = render_pattern_configuration(rels)
@@ -41,6 +41,7 @@ def render_sidebar() -> Dict[str, Any]:
     current_config = {
         "project_name": project_name,
         "advanced_mode": advanced_mode,
+        "seed": seed,
         "relations": rels,
         "patterns": patterns,
         "pattern_settings": pattern_settings,
@@ -97,7 +98,7 @@ def _render_analysis_in_progress() -> None:
 
 def _render_analysis_results() -> None:
     """Render the complete analysis results interface with a tabbed layout."""
-    st.header("Analysis Results")
+    st.header("Generated Data & Join Plans")
 
     plans_dir = os.path.join(
         st.session_state.output_dir, CONFIG["iteration_name"], "plans"
@@ -132,16 +133,23 @@ def _render_analysis_results() -> None:
 # ==============================================================================
 
 
-def _render_project_settings() -> str:
+def _render_project_settings() -> Tuple[str, int]:
     """Render project name input and return the value"""
     st.sidebar.subheader("Project")
     project_name = st.sidebar.text_input(
         "Project Name",
         value=st.session_state.get("project_name", "Synthetic Data & Join Plans"),
-        key="project_name_input",
+        key="project_name",
     )
-    st.session_state.project_name = project_name
-    return project_name
+    seed = st.sidebar.number_input(
+        "Seed",
+        value=st.session_state.get("seed", None),
+        placeholder="Random",
+        step=1,
+        min_value=0,
+        key="seed",
+    )
+    return project_name, seed
 
 
 def _render_mode_and_relations() -> Tuple[bool, list]:
@@ -165,7 +173,7 @@ def render_simple_mode_config():
     """Render simple mode configuration with consistent styling"""
     st.sidebar.subheader("Simple Configuration")
 
-    num_relations = st.sidebar.slider(
+    num_relations = st.sidebar.number_input(
         "Number of Relations",
         CONFIG["rel_limits"]["min"],
         CONFIG["rel_limits"]["max"],
@@ -174,7 +182,7 @@ def render_simple_mode_config():
 
     rows = st.sidebar.selectbox("Rows per Relation", CONFIG["row_options"], index=2)
 
-    attributes = st.sidebar.slider(
+    attributes = st.sidebar.number_input(
         "Attributes per Relation",
         CONFIG["attribute_limits"]["min"],
         CONFIG["attribute_limits"]["max"],
@@ -189,6 +197,16 @@ def render_simple_mode_config():
     with st.sidebar:
         params = _render_distribution_params(distribution, "simple_config")
 
+    null_ratio_percent = st.sidebar.number_input(
+        "Null Ratio (%)",
+        0,
+        100,
+        0,
+        5,
+        key="simple_null_ratio",
+    )
+    null_ratio = null_ratio_percent / 100.0
+
     # Create relations with consistent structure
     relations = []
     for i in range(num_relations):
@@ -199,6 +217,7 @@ def render_simple_mode_config():
                     "name": f"attr{j}",
                     "dtype": "int64",
                     "distribution": {"type": distribution, **params},
+                    "null_ratio": null_ratio,
                 }
             )
         relations.append({"name": f"rel{i}", "num_rows": rows, "attributes": rel_attrs})
@@ -213,32 +232,23 @@ def render_advanced_mode_config():
     if "advanced_relations" not in st.session_state:
         st.session_state.update({"advanced_relations": []})
 
-    # Standardized relation management buttons
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        add_clicked = st.button(
-            "Add Relation", use_container_width=True, key="advanced_add_relation"
-        )
-    with col2:
-        remove_clicked = st.button(
-            "Remove Relation",
-            disabled=len(st.session_state["advanced_relations"]) == 0,
-            use_container_width=True,
-            key="advanced_remove_relation",
-        )
+    add_clicked, remove_clicked = _render_standard_button_pair(
+        "Add Relation",
+        "Remove Relation",
+        "advanced_add_relation",
+        "advanced_remove_relation",
+        left_icon=":material/add:",
+        right_icon=":material/remove:",
+        right_disabled=len(st.session_state["advanced_relations"]) == 0,
+        container=st.sidebar,
+    )
 
     if add_clicked:
         st.session_state["advanced_relations"].append(
             {
                 "name": f"rel{len(st.session_state['advanced_relations'])}",
                 "num_rows": 1000,
-                "attributes": [
-                    {
-                        "name": "id",
-                        "dtype": "int64",
-                        "distribution": {"type": "sequential", "start": 1},
-                    }
-                ],
+                "attributes": [],
             }
         )
         st.rerun()
@@ -260,28 +270,36 @@ def render_relation_configuration(rel_idx: int, rel: Dict[str, Any]) -> None:
     _render_relation_basics(rel_idx, rel)
     _handle_attribute_management(rel_idx, rel)
 
-    # Render each attribute
     for j, attr in enumerate(rel["attributes"]):
-        st.write(f"*Attribute {j + 1}:*")
-        render_attribute_configuration(rel_idx, j, attr)
+        with st.expander(f"Attribute {j + 1}: {attr.get('name', 'New Attribute')}"):
+            render_attribute_configuration(rel_idx, j, attr)
 
 
 def render_attribute_configuration(
     rel_idx: int, attr_idx: int, attr: Dict[str, Any]
 ) -> None:
-    """Render individual attribute configuration with consistent components"""
-    # Attribute basic settings
-    name, dtype = _render_standard_input_pair(
-        lambda: st.text_input(
-            "Name", value=attr["name"], key=f"attribute_name_r{rel_idx}_a{attr_idx}"
-        ),
-        lambda: st.selectbox(
+    """Renders configuration inputs for a single attribute."""
+
+    def name_input():
+        return st.text_input(
+            "Name", value=attr["name"], key=f"attr_name_r{rel_idx}_a{attr_idx}"
+        )
+
+    def dtype_input():
+        current_dtype = attr.get("dtype", "int64")
+        index = (
+            CONFIG["data_types"].index(current_dtype)
+            if current_dtype in CONFIG["data_types"]
+            else 1
+        )
+        return st.selectbox(
             "Data Type",
             CONFIG["data_types"],
-            index=CONFIG["data_types"].index(attr.get("dtype", "int64")),
-            key=f"attribute_dtype_r{rel_idx}_a{attr_idx}",
-        ),
-    )
+            index=index,
+            key=f"attr_dtype_r{rel_idx}_a{attr_idx}",
+        )
+
+    name, dtype = _render_standard_input_pair(name_input, dtype_input)
 
     current_distribution = attr.get("distribution", {"type": "uniform"})
     distribution_type = st.selectbox(
@@ -298,11 +316,23 @@ def render_attribute_configuration(
         distribution_type, key_prefix, current_distribution
     )
 
+    default_ratio_percent = int(attr.get("null_ratio", 0) * 100)
+    null_ratio_percent = st.number_input(
+        "Null Ratio (%)",
+        0,
+        100,
+        default_ratio_percent,
+        5,
+        key=f"attr_null_ratio_r{rel_idx}_a{attr_idx}",
+    )
+    null_ratio = null_ratio_percent / 100.0
+
     attr.update(
         {
             "name": name,
             "dtype": dtype,
             "distribution": {"type": distribution_type, **params},
+            "null_ratio": null_ratio,
         }
     )
 
@@ -311,18 +341,15 @@ def render_pattern_configuration(relations: list) -> Tuple[list, dict]:
     """Render pattern configuration, including the custom plan editor."""
     st.sidebar.subheader("Join Patterns")
 
-    all_patterns = CONFIG["patterns"] + ["custom"]
-
-    # Use a persistent session state key for the multiselect default
-    default_patterns = st.session_state.get(
-        "selected_patterns", CONFIG["default_patterns"]
-    )
+    all_patterns = CONFIG["patterns"]
+    if "selected_patterns" not in st.session_state:
+        st.session_state.selected_patterns = CONFIG["default_patterns"]
 
     patterns = st.sidebar.multiselect(
-        "Select Patterns", all_patterns, default=default_patterns
+        "Select Patterns",
+        all_patterns,
+        key="selected_patterns",
     )
-    # Immediately update the session state with the user's selection
-    st.session_state.selected_patterns = patterns
 
     pattern_settings = {}
 
@@ -332,20 +359,21 @@ def render_pattern_configuration(relations: list) -> Tuple[list, dict]:
         with st.sidebar.expander("Standard Pattern Settings", expanded=False):
             for pattern in standard_patterns:
                 st.write(f"**{pattern.title()}**")
-                num_plans, perms = _render_two_column_layout(
-                    lambda: st.number_input(
-                        f"Number of plans",
-                        min_value=1,
-                        max_value=5,
-                        value=st.session_state.get(f"num_{pattern}", 1),
-                        key=f"num_{pattern}",
-                    ),
-                    lambda: st.toggle(
-                        "Permutations",
-                        value=st.session_state.get(f"perms_{pattern}", True),
-                        key=f"perms_{pattern}",
-                    ),
+
+                num_plans = st.number_input(
+                    "Number of plans",
+                    min_value=1,
+                    max_value=5,
+                    value=st.session_state.get(f"num_{pattern}", 1),
+                    key=f"num_{pattern}",
                 )
+
+                perms = st.toggle(
+                    "Permutations",
+                    value=st.session_state.get(f"perms_{pattern}", True),
+                    key=f"perms_{pattern}",
+                )
+
                 pattern_settings[f"pattern_num_plans_{pattern}"] = num_plans
                 pattern_settings[f"pattern_permutations_{pattern}"] = perms
 
@@ -364,19 +392,20 @@ def _render_custom_plan_editor(relations: List[Dict[str, Any]]) -> Dict[str, Any
         if "custom_joins" not in st.session_state:
             st.session_state.custom_joins = []
 
-        # Add/Remove buttons
-        add, remove = _render_two_column_layout(
-            lambda: st.button("Add Join", use_container_width=True),
-            lambda: st.button(
-                "Remove Last Join",
-                use_container_width=True,
-                disabled=not st.session_state.custom_joins,
-            ),
+        add_clicked, remove_clicked = _render_standard_button_pair(
+            left_text="Add Join Stage",
+            right_text="Remove Join Stage",
+            left_key="custom_add_join",
+            right_key="custom_remove_join",
+            left_icon=":material/add:",
+            right_icon=":material/remove:",
+            right_disabled=not st.session_state.custom_joins,
         )
-        if add:
+
+        if add_clicked:
             st.session_state.custom_joins.append(["", "", ""])
             st.rerun()
-        if remove:
+        if remove_clicked:
             st.session_state.custom_joins.pop()
             st.rerun()
 
@@ -411,8 +440,6 @@ def _render_custom_plan_editor(relations: List[Dict[str, Any]]) -> Dict[str, Any
                     key=f"cust_attr_{i}",
                 )
 
-        # Permutation settings for the custom plan
-        st.markdown("**Permutations**")
         perms = st.toggle(
             "Permutations",
             value=st.session_state.get("perms_custom", False),
@@ -448,17 +475,30 @@ def render_analysis_options():
     """Render analysis options with consistent styling"""
     st.sidebar.subheader("Analysis & Visualization")
 
-    enable_analysis = st.sidebar.toggle("Run Performance Analysis", value=True)
-    enable_visualization = st.sidebar.toggle("Visualize Join Plans", value=True)
+    def analysis_toggle():
+        return st.toggle("Run Performance Analysis", value=True)
+
+    def visualization_toggle():
+        return st.toggle("Visualize Join Plans", value=True)
+
+    enable_analysis, enable_visualization = _render_two_column_layout(
+        analysis_toggle, visualization_toggle, container=st.sidebar
+    )
 
     if not enable_analysis and enable_visualization:
         st.sidebar.info(
             "Visualizations will not include performance metrics if analysis is disabled."
         )
 
-    viz_format = st.sidebar.selectbox(
-        "Visualization Format", CONFIG["viz_formats"], index=0
-    )
+    if enable_visualization:
+        viz_format = st.sidebar.selectbox(
+            "Visualization Format",
+            CONFIG["viz_formats"],
+            index=0,
+            key="visualization_format",
+        )
+    else:
+        viz_format = st.session_state.get("visualization_format", "png")
 
     return enable_analysis, enable_visualization, viz_format
 
@@ -641,29 +681,38 @@ def _render_distribution_params(
         return {"start": start}
 
 
-def _render_relation_basics(rel_idx: int, rel: Dict[str, Any]) -> None:
-    """Render relation name and row count inputs"""
-    name, rows = _render_standard_input_pair(
-        lambda: st.text_input("Name", value=rel["name"], key=f"rel_name_r{rel_idx}"),
-        lambda: st.selectbox(
-            "Rows",
-            CONFIG["row_options"],
-            index=CONFIG["row_options"].index(rel.get("num_rows", 1000)),
-            key=f"rel_rows_r{rel_idx}",
-        ),
-    )
-    rel.update({"name": name, "num_rows": rows})
+def _render_relation_basics(rel_idx: int, rel_data: Dict[str, Any]) -> None:
+    """Renders the 'Name' and 'Rows' inputs for a relation."""
+
+    def name_input():
+        return st.text_input("Name", value=rel_data["name"], key=f"rel_name_r{rel_idx}")
+
+    def rows_input():
+        # Find the index of the current value, defaulting to 1000 if not found
+        current_rows = rel_data.get("num_rows", 1000)
+        index = (
+            CONFIG["row_options"].index(current_rows)
+            if current_rows in CONFIG["row_options"]
+            else 2
+        )
+        return st.selectbox(
+            "Rows", CONFIG["row_options"], index=index, key=f"rel_rows_r{rel_idx}"
+        )
+
+    name, rows = _render_standard_input_pair(name_input, rows_input)
+    rel_data.update({"name": name, "num_rows": rows})
 
 
 def _handle_attribute_management(rel_idx: int, rel: Dict[str, Any]) -> None:
     """Handle add/remove attribute buttons and logic"""
-    st.write("**Attributes:**")
     add_clicked, remove_clicked = _render_standard_button_pair(
         "Add Attribute",
         "Remove Attribute",
         f"rel_add_attr_t{rel_idx}",
         f"rel_remove_attr_t{rel_idx}",
-        right_disabled=len(rel["attributes"]) <= 1,
+        left_icon=":material/add:",
+        right_icon=":material/remove:",
+        right_disabled=len(rel["attributes"]) < 1,
     )
 
     if add_clicked:
@@ -676,7 +725,7 @@ def _handle_attribute_management(rel_idx: int, rel: Dict[str, Any]) -> None:
         )
         st.rerun()
 
-    if remove_clicked and len(rel["attributes"]) > 1:
+    if remove_clicked:
         rel["attributes"].pop()
         st.rerun()
 
@@ -701,6 +750,7 @@ def _handle_analysis_execution(config: Dict[str, Any]) -> None:
     try:
         config_dict = create_project_config(
             config["project_name"],
+            config["seed"],
             config["relations"],
             config["patterns"],
             config["enable_analysis"],
@@ -717,7 +767,6 @@ def _handle_analysis_execution(config: Dict[str, Any]) -> None:
                     "running_analysis": False,
                     "output_dir": output_dir,
                     "analysis_results": output_dir,
-                    "visualization_format": config["visualization_format"],
                 }
             )
             st.success("Generation completed successfully!")

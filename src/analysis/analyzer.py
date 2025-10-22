@@ -53,6 +53,10 @@ def _perform_binary_join_stage(
     rel0_keys = stage["on_attributes"][0]
     rel1_keys = stage["on_attributes"][1]
 
+    # drop nulls for DB-like join behaviour, dask will join on them if not dropped
+    rel0_df = rel0_df.dropna(subset=rel0_keys)
+    rel1_df = rel1_df.dropna(subset=rel1_keys)
+
     # cartesian product for join branch merging
     if not rel0_keys:
         rel0_df["key"] = 1
@@ -73,10 +77,14 @@ def _perform_nary_join_stage(
     rel0 = rels.pop(0)
     rel0_df = dfs[rel0]
     rel0_keys = join_keys.pop(0)
+    # drop nulls for DB-like join behaviour, dask will join on them if not dropped
+    rel0_df = rel0_df.dropna(subset=rel0_keys)
 
     for i, rel1 in enumerate(rels):
         rel1_df = dfs[rel1]
         rel1_keys = join_keys[i]
+        # drop nulls for DB-like join behaviour, dask will join on them if not dropped
+        rel1_df = rel1_df.dropna(subset=rel1_keys)
 
         if not rel0_keys:
             rel0_df["key"] = 1
@@ -140,16 +148,20 @@ def _analyze_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
                 total_intermediates += output_size
             else:
                 total_intermediates = output_size
-            selectivity = output_size / prod(
+
+            selectivity_denom = prod(
                 (len(dfs[rel]) for rel in stage["input_relations"])
             )
+            selectivity = round(output_size / (
+                1 if selectivity_denom == 0 else selectivity_denom
+            ), 4)
 
             stage_result = {
                 "stage_id": stage["stage_id"],
                 "contains": list(contains),
                 "output_size": output_size,
                 "total_intermediates": total_intermediates,
-                "selectivity": max(round(selectivity, 4), 0.0001),
+                "selectivity": selectivity,
             }
             logger.debug(f"\t\t\t\t\tStage {i} completed: {output_size} rows")
 

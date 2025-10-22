@@ -12,7 +12,7 @@ from src.ui.models import (
     get_all_data_files,
     create_zip_archive,
 )
-from src.ui.utils import _render_two_column_layout
+from src.ui.utils import _render_two_column_layout, _render_standard_input_pair
 
 
 def _create_plan_charts(plan: PlanMetadata, title_prefix: str):
@@ -71,58 +71,35 @@ def _render_plan_comparison_controls(
     if analysis_was_run:
         best_binary, best_nary = get_best_plans_by_type(filtered_plans, sort_by)
         can_select_best = best_binary is not None and best_nary is not None
-
-        if st.button(
-            "Select Best Plans", disabled=not can_select_best, type="secondary"
-        ):
+        if st.button("Select Best Plans", disabled=not can_select_best, type="secondary"):
             if best_binary and best_nary:
-                st.session_state.update(
-                    {
-                        "selected_left_plan": best_binary.get_display_name(),
-                        "selected_right_plan": best_nary.get_display_name(),
-                    }
-                )
+                st.session_state.plan_select_left = best_binary.get_display_name()
+                st.session_state.plan_select_right = best_nary.get_display_name()
                 st.rerun()
 
-    # Plan selection with consistent styling
     plan_names = [p.get_display_name() for p in filtered_plans]
 
-    # Get current selections
-    current_left_idx = 0
-    current_right_idx = min(1, len(plan_names) - 1)
+    if "plan_select_left" not in st.session_state and plan_names:
+        st.session_state.plan_select_left = plan_names[0]
+    if "plan_select_right" not in st.session_state and len(plan_names) > 1:
+        st.session_state.plan_select_right = plan_names[1]
 
-    if st.session_state.get("selected_left_plan") in plan_names:
-        current_left_idx = plan_names.index(st.session_state.get("selected_left_plan"))
-    if st.session_state.get("selected_right_plan") in plan_names:
-        current_right_idx = plan_names.index(
-            st.session_state.get("selected_right_plan")
-        )
+    def left_plan_selector():
+        return st.selectbox("Left Plan", plan_names, key="plan_select_left")
 
-    def left():
-        return st.selectbox(
-            "Left Plan",
-            plan_names,
-            index=current_left_idx,
-            key="plan_select_left",
-        )
+    def right_plan_selector():
+        return st.selectbox("Right Plan", plan_names, key="plan_select_right")
 
-    def right():
-        return st.selectbox(
-            "Right Plan",
-            plan_names,
-            index=current_right_idx,
-            key="plan_select_right",
-        )
+    _render_standard_input_pair(left_plan_selector, right_plan_selector)
 
-    left_name, right_name = _render_two_column_layout(left, right)
+    left_name = st.session_state.plan_select_left
+    right_name = st.session_state.plan_select_right
 
-    # Update session state
-    st.session_state.update(
-        {"selected_left_plan": left_name, "selected_right_plan": right_name}
-    )
+    left_plan = next((p for p in filtered_plans if p.get_display_name() == left_name), None)
+    right_plan = next((p for p in filtered_plans if p.get_display_name() == right_name), None)
 
-    left_plan = next(p for p in filtered_plans if p.get_display_name() == left_name)
-    right_plan = next(p for p in filtered_plans if p.get_display_name() == right_name)
+    if not left_plan: left_plan = filtered_plans[0]
+    if not right_plan: right_plan = filtered_plans[-1]
 
     return left_plan, right_plan
 

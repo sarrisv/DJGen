@@ -1,4 +1,5 @@
 import os
+import json
 from typing import List, Dict, Any
 import streamlit as st
 
@@ -50,6 +51,19 @@ def _render_data_and_join_plan_summary(
     st.code(query.get("sql", "SQL query not found."), language="sql")
 
 
+def _render_plan_file_content(plan: PlanMetadata) -> None:
+    """
+    Renders an expandable section showing the raw plan file content.
+    """
+    with st.expander("Plan File Content", expanded=False):
+        st.markdown(f"**File:** `{plan.filename}`")
+        
+        # Format the JSON data with proper indentation
+        formatted_json = json.dumps(plan.plan_data, indent=2, ensure_ascii=False)
+        
+        st.code(formatted_json, language="json")
+
+
 def render_data_tab(filtered_plans: List[PlanMetadata], output_dir: str):
     """
     Orchestrates the rendering of the 'Data' tab.
@@ -70,5 +84,8 @@ def render_data_tab(filtered_plans: List[PlanMetadata], output_dir: str):
         # Pass selected plan, output_dir, and viz_format to the summary renderer
         viz_format = st.session_state.get("visualization_format", "png")
         _render_data_and_join_plan_summary(selected_plan, output_dir, viz_format)
+        
+        # Add expandable section for plan file content
+        _render_plan_file_content(selected_plan)
     else:
         st.warning("Could not find the selected plan.")
