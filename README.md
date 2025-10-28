@@ -1,4 +1,4 @@
-# Data & Join Plan Generator (djp-generator)
+# Data & Join Plan Generator (DJGen)
 
 A command-line tool and web interface for generating configurable synthetic datasets and fully conjunctive join plans. Data generation and join plan analysis are parallelized via Dask for scalability.
 
@@ -50,8 +50,8 @@ The tool operates in three distinct, sequential phases for each "iteration" defi
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/sarrisv/djp-generator.git
-   cd djp-generator
+   git clone https://github.com/sarrisv/DJGen.git
+   cd DJGen
    ```
 
 2. **Create virtual environment and install dependencies:**
