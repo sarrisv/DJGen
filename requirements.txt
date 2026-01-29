@@ -37,7 +37,7 @@ dask==2025.7.0
     # via
     #   djgen (pyproject.toml)
     #   distributed
-distributed==2025.7.0
+distributed==2026.1.0
     # via dask
 fonttools==4.61.1
     # via matplotlib
