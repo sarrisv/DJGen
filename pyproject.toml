@@ -1,15 +1,17 @@
 [project]
-name = "djp-generator"
+name = "DJGen"
 version = "0.1.0"
 dependencies = [
   "dask[complete]>=2025.7.0",
   "graphviz>=0.21",
   "pandas>=2.3.1",
   "plotly>=6.3.0",
-  "streamlit>=1.49.1",
+  "streamlit>=1.53.0",
   "toml>=0.10.2",
+  "pyarrow>=22.0.0",
+  "seaborn>=0.13.2",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 authors = [{ name = "Vasilis Sarris", email = "v.sarris@pitt.edu" }]
 description = "Easily generate customizable data and join plans for fully conjunctive natural joins"
 readme = "README.md"
@@ -17,4 +19,4 @@ license = "MIT"
 keywords = ["data-generation", "synthetic-data", "relational-joins"]
 
 [project.urls]
-Repository = "https://github.com/sarrisv/djp-generator.git"
+Repository = "https://github.com/sarrisv/DJGen.git"

@@ -1,0 +1,14 @@
+[project]
+name = "Quick Test Config"
+output_dir = "output/size"
+
+[[iterations]]
+name = "100000000"
+
+[iterations.datagen]
+enabled = true
+relations = [
+  { name = "rel0", num_rows = 100000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+  ] },
+]

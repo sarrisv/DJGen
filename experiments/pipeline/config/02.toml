@@ -1,0 +1,25 @@
+[project]
+name = "2 Relations"
+output_dir = "output/experiments"
+
+[[iterations]]
+name = "02"
+
+[iterations.datagen]
+enabled = true
+relations = [
+  { name = "rel0", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel1", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+  ] },
+]
+
+[iterations.plangen]
+base_plans = [{ pattern = "random" }]
+
+[iterations.analysis]
+enabled = true

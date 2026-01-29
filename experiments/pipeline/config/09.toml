@@ -1,0 +1,116 @@
+[project]
+name = "9 Relations"
+output_dir = "output/experiments"
+
+[[iterations]]
+name = "09"
+
+[iterations.datagen]
+enabled = true
+relations = [
+  { name = "rel0", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel1", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel2", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel3", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel4", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel5", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel6", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel7", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+  { name = "rel8", num_rows = 10000000, attributes = [
+    { name = "attr0", distribution = { type = "uniform" } },
+    { name = "attr1", distribution = { type = "uniform" } },
+    { name = "attr2", distribution = { type = "uniform" } },
+    { name = "attr3", distribution = { type = "uniform" } },
+    { name = "attr4", distribution = { type = "uniform" } },
+    { name = "attr5", distribution = { type = "uniform" } },
+    { name = "attr6", distribution = { type = "uniform" } },
+    { name = "attr7", distribution = { type = "uniform" } },
+    { name = "attr8", distribution = { type = "uniform" } },
+  ] },
+]
+
+[iterations.plangen]
+base_plans = [{ pattern = "random" }]
+
+[iterations.analysis]
+enabled = true
