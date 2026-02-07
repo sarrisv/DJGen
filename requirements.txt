@@ -116,7 +116,7 @@ pillow==11.3.0
     #   streamlit
 plotly==6.3.0
     # via djgen (pyproject.toml)
-protobuf==6.32.1
+protobuf==6.33.5
     # via streamlit
 psutil==7.0.0
     # via distributed
